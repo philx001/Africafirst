@@ -81,7 +81,7 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
 
   return (
     <div className="space-y-8 max-w-5xl">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             {contact.firstName} {contact.lastName}
@@ -96,9 +96,17 @@ export function ContactDetailClient({ contactId }: { contactId: string }) {
             </p>
           )}
         </div>
-        <Link href="/contacts" className="text-sm text-primary hover:underline shrink-0">
-          ← Contacts
-        </Link>
+        <div className="flex items-center gap-3 shrink-0">
+          <Link
+            href={`/contacts/${contact.id}/edit`}
+            className="text-sm px-3 py-1.5 rounded-lg border hover:bg-muted transition-colors"
+          >
+            Modifier
+          </Link>
+          <Link href="/contacts" className="text-sm text-primary hover:underline">
+            ← Contacts
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
