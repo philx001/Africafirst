@@ -1,29 +1,44 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Search, Bell, Moon, Sun } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatRelative } from '@/lib/utils';
 import type { User } from '@supabase/supabase-js';
 
 export function TopBar({ user: _user }: { user: User }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
-    queryFn: () => api.get('/notifications/unread-count').then((r: unknown) => (r as { data: number }).data),
+    queryFn: () => api.get('/notifications/unread-count') as Promise<number>,
     refetchInterval: 30000,
   });
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => api.get('/notifications?unreadOnly=true').then((r: unknown) => (r as { data: unknown[] }).data),
+    queryFn: () => api.get('/notifications?unreadOnly=true') as Promise<Array<{
+      id: string;
+      title: string;
+      body?: string | null;
+      createdAt: string;
+      readAt?: string | null;
+    }>>,
     enabled: showNotifications,
   });
+
+  const handleSearchSubmit = () => {
+    const q = searchQuery.trim();
+    if (q.length < 2) return;
+    router.push(`/search?q=${encodeURIComponent(q)}`);
+  };
 
   return (
     <header className="h-16 border-b bg-background flex items-center gap-4 px-6">
@@ -36,6 +51,12 @@ export function TopBar({ user: _user }: { user: User }) {
             placeholder="Rechercher contacts, deals, projets..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearchSubmit();
+              }
+            }}
             className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
           />
         </div>
@@ -69,17 +90,22 @@ export function TopBar({ user: _user }: { user: User }) {
               <div className="p-3 border-b flex items-center justify-between">
                 <p className="text-sm font-semibold">Notifications</p>
                 <button
-                  onClick={() => api.patch('/notifications/read-all')}
+                  type="button"
+                  onClick={async () => {
+                    await api.patch('/notifications/read-all');
+                    await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                    await queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+                  }}
                   className="text-xs text-primary hover:underline"
                 >
                   Tout marquer comme lu
                 </button>
               </div>
               <div className="max-h-80 overflow-y-auto divide-y">
-                {(notifications as Array<{ id: string; title: string; body?: string; createdAt: string; readAt?: string }>).length === 0 ? (
+                {notifications.length === 0 ? (
                   <p className="p-4 text-sm text-muted-foreground text-center">Aucune notification</p>
                 ) : (
-                  (notifications as Array<{ id: string; title: string; body?: string; createdAt: string; readAt?: string }>).map((n) => (
+                  notifications.map((n) => (
                     <div key={n.id} className="p-3 hover:bg-muted/30 transition-colors">
                       <p className="text-sm font-medium">{n.title}</p>
                       {n.body && <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>}

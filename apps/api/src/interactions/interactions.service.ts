@@ -17,6 +17,7 @@ export class CreateInteractionDto {
   @ApiPropertyOptional() @IsOptional() @IsString() outcome?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() contactId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() dealId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() projectId?: string;
 }
 
 @Injectable()
@@ -33,6 +34,7 @@ export class InteractionsService {
       include: {
         contact: { select: { id: true, firstName: true, lastName: true } },
         deal: { select: { id: true, title: true } },
+        project: { select: { id: true, name: true } },
         user: { select: { id: true, firstName: true, lastName: true } },
       },
     });
@@ -41,6 +43,7 @@ export class InteractionsService {
   async findAll(pagination: PaginationDto, user: AuthUser, filters?: {
     contactId?: string;
     dealId?: string;
+    projectId?: string;
     type?: InteractionType;
   }) {
     const { page = 1, limit = 20 } = pagination;
@@ -50,6 +53,7 @@ export class InteractionsService {
       organizationId: user.organizationId,
       ...(filters?.contactId && { contactId: filters.contactId }),
       ...(filters?.dealId && { dealId: filters.dealId }),
+      ...(filters?.projectId && { projectId: filters.projectId }),
       ...(filters?.type && { type: filters.type }),
     };
 
@@ -62,6 +66,7 @@ export class InteractionsService {
         include: {
           contact: { select: { id: true, firstName: true, lastName: true } },
           deal: { select: { id: true, title: true } },
+          project: { select: { id: true, name: true } },
           user: { select: { id: true, firstName: true, lastName: true } },
         },
       }),

@@ -324,15 +324,40 @@ model Project {
   contactId String?
   contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
-  tasks     Task[]
-  documents Document[]
-  messages  Message[]
+  tasks        Task[]
+  documents    Document[]
+  messages     Message[]
+  phases       ProjectPhase[]
+  interactions Interaction[]
 
   @@index([organizationId])
   @@index([status, organizationId])
   @@index([offerType, organizationId])
   @@index([dealId])
   @@map("projects")
+}
+
+// ============================================================
+// PHASE PROJET (onboarding / jalons — sautables ou N/A)
+// ============================================================
+
+model ProjectPhase {
+  id          String             @id @default(cuid())
+  key         String
+  label       String
+  description String?
+  sortOrder   Int                @default(0)
+  status      ProjectPhaseStatus @default(pending)
+  completedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, key])
+  @@index([projectId])
+  @@map("project_phases")
 }
 
 // ============================================================
@@ -399,12 +424,16 @@ model Interaction {
   dealId String?
   deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([contactId])
   @@index([dealId])
+  @@index([projectId])
   @@index([occurredAt])
   @@map("interactions")
 }
@@ -590,6 +619,14 @@ enum OfferType {
   produit_physique
   partenariat
   autre
+}
+
+enum ProjectPhaseStatus {
+  pending
+  in_progress
+  completed
+  skipped
+  not_applicable
 }
 
 enum ProjectStatus {

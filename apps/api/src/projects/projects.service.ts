@@ -1,7 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { PaginationDto } from '../common/pipes/pagination.pipe';
-import { AuthUser, ProjectStatus, OFFER_TYPE_VALUES, type OfferType } from '@crm/shared';
+import {
+  AuthUser,
+  ProjectStatus,
+  OFFER_TYPE_VALUES,
+  DEFAULT_PROJECT_PHASE_TEMPLATES,
+  PROJECT_PHASE_STATUS_VALUES,
+  type OfferType,
+  type ProjectPhaseStatus,
+} from '@crm/shared';
 import { IsOptional, IsString, IsArray, IsEnum, IsInt, Min, Max, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -23,6 +31,12 @@ export class CreateProjectDto {
   @IsOptional()
   @IsIn([...OFFER_TYPE_VALUES])
   offerType?: OfferType;
+}
+
+export class UpdateProjectPhaseDto {
+  @ApiProperty({ enum: PROJECT_PHASE_STATUS_VALUES as unknown as string[] })
+  @IsIn([...PROJECT_PHASE_STATUS_VALUES])
+  status: ProjectPhaseStatus;
 }
 
 @Injectable()
@@ -83,6 +97,7 @@ export class ProjectsService {
       include: {
         deal: true,
         contact: true,
+        phases: { orderBy: { sortOrder: 'asc' } },
         tasks: {
           orderBy: [{ status: 'asc' }, { order: 'asc' }],
           include: {
@@ -96,6 +111,52 @@ export class ProjectsService {
 
     if (!project) throw new NotFoundException('Projet introuvable');
     return project;
+  }
+
+  async bootstrapPhases(id: string, user: AuthUser) {
+    const project = await this.prisma.project.findFirst({
+      where: { id, organizationId: user.organizationId },
+      select: { id: true },
+    });
+    if (!project) throw new NotFoundException('Projet introuvable');
+    const existing = await this.prisma.projectPhase.count({ where: { projectId: id } });
+    if (existing > 0) {
+      return this.prisma.projectPhase.findMany({
+        where: { projectId: id },
+        orderBy: { sortOrder: 'asc' },
+      });
+    }
+    await this.prisma.projectPhase.createMany({
+      data: DEFAULT_PROJECT_PHASE_TEMPLATES.map((t) => ({
+        projectId: id,
+        key: t.key,
+        label: t.label,
+        sortOrder: t.sortOrder,
+      })),
+    });
+    return this.prisma.projectPhase.findMany({
+      where: { projectId: id },
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  async updatePhase(projectId: string, phaseId: string, dto: UpdateProjectPhaseDto, user: AuthUser) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, organizationId: user.organizationId },
+      select: { id: true },
+    });
+    if (!project) throw new NotFoundException('Projet introuvable');
+    const phase = await this.prisma.projectPhase.findFirst({
+      where: { id: phaseId, projectId },
+    });
+    if (!phase) throw new NotFoundException('Phase introuvable');
+    return this.prisma.projectPhase.update({
+      where: { id: phaseId },
+      data: {
+        status: dto.status,
+        completedAt: dto.status === 'completed' ? new Date() : null,
+      },
+    });
   }
 
   async update(id: string, dto: Partial<CreateProjectDto>, user: AuthUser) {

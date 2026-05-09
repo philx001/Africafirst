@@ -37,10 +37,7 @@ Thumbs.db
 *.swp
 *.swo
 
-# Prisma
-apps/api/prisma/migrations/
-!apps/api/prisma/migrations/.gitkeep
-
+# Prisma — les migrations sont versionnées pour les déploiements (`migrate deploy`).
 # Testing
 coverage
 

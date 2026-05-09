@@ -21,7 +21,7 @@ interface Project {
 export function ProjectsList() {
   const { data, isLoading } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => api.get('/projects?limit=50').then((r: unknown) => (r as { data: { data: Project[] } }).data.data),
+    queryFn: () => api.get('/projects?limit=50').then((r: unknown) => (r as { data: Project[] }).data),
   });
 
   const getStatusConfig = (status: string) =>

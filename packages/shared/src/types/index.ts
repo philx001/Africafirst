@@ -29,6 +29,14 @@ export type ProjectStatus =
   | 'completed'
   | 'cancelled';
 
+/** Phase de jalonnement projet (onboarding administratif, distinct du LMS). */
+export type ProjectPhaseStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'skipped'
+  | 'not_applicable';
+
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 
 export type InteractionType = 'email' | 'call' | 'meeting' | 'note';

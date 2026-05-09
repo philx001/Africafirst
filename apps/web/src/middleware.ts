@@ -37,7 +37,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/projects') ||
     pathname.startsWith('/tasks') ||
     pathname.startsWith('/automations') ||
-    pathname.startsWith('/settings');
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/search');
 
   // Non authentifié → rediriger vers login
   if (!user && (isInternalRoute || isClientRoute)) {

@@ -2,7 +2,7 @@
 // Constantes partagées
 // ============================================================
 
-import type { OfferType } from '../types';
+import type { OfferType, ProjectPhaseStatus } from '../types';
 
 export const DEAL_STAGES = [
   { id: 'lead', label: 'Lead', color: '#94a3b8' },
@@ -33,6 +33,32 @@ export const PROJECT_STATUSES = [
   { id: 'completed', label: 'Terminé', color: '#4ade80' },
   { id: 'cancelled', label: 'Annulé', color: '#f87171' },
 ] as const;
+
+/** Valeurs valides pour `ProjectPhase.status` (Prisma + DTO). */
+export const PROJECT_PHASE_STATUS_VALUES: readonly ProjectPhaseStatus[] = [
+  'pending',
+  'in_progress',
+  'completed',
+  'skipped',
+  'not_applicable',
+] as const;
+
+export const PROJECT_PHASE_STATUSES: { id: ProjectPhaseStatus; label: string; color: string }[] = [
+  { id: 'pending', label: 'À faire', color: '#94a3b8' },
+  { id: 'in_progress', label: 'En cours', color: '#60a5fa' },
+  { id: 'completed', label: 'Terminé', color: '#4ade80' },
+  { id: 'skipped', label: 'Ignoré', color: '#a78bfa' },
+  { id: 'not_applicable', label: 'N/A', color: '#64748b' },
+];
+
+/** Gabarit par défaut instancié sur un projet via POST .../phases/bootstrap. */
+export const DEFAULT_PROJECT_PHASE_TEMPLATES: readonly { key: string; label: string; sortOrder: number }[] = [
+  { key: 'kickoff', label: 'Lancement & cadrage', sortOrder: 0 },
+  { key: 'contract', label: 'Contrat & signature', sortOrder: 1 },
+  { key: 'onboarding', label: 'Onboarding client', sortOrder: 2 },
+  { key: 'delivery', label: 'Livraison & recette', sortOrder: 3 },
+  { key: 'closure', label: 'Clôture & bilan', sortOrder: 4 },
+];
 
 export const TASK_STATUSES = [
   { id: 'todo', label: 'À faire', color: '#94a3b8' },

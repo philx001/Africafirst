@@ -19,15 +19,16 @@ export class InteractionsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lister les interactions (filtrable par contact, deal, type)' })
+  @ApiOperation({ summary: 'Lister les interactions (filtrable par contact, deal, projet, type)' })
   findAll(
     @Query() pagination: PaginationDto,
     @CurrentUser() user: AuthUser,
     @Query('contactId') contactId?: string,
     @Query('dealId') dealId?: string,
+    @Query('projectId') projectId?: string,
     @Query('type') type?: InteractionType,
   ) {
-    return this.interactionsService.findAll(pagination, user, { contactId, dealId, type });
+    return this.interactionsService.findAll(pagination, user, { contactId, dealId, projectId, type });
   }
 
   @Delete(':id')
