@@ -1,0 +1,5 @@
+-- NOTE:
+-- Supabase `storage.objects` is owned by the platform role, not by the application DB user.
+-- Therefore this migration is intentionally a no-op to keep Prisma history consistent.
+-- Apply storage policies manually with owner privileges using:
+--   docs/supabase-storage-documents-rls.sql
