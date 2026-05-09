@@ -1,20 +1,34 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { DealContractTunnel } from '@/components/crm/deals/deal-contract-tunnel';
+import { OFFER_TYPES, type OfferType } from '@crm/shared';
+import { toast } from 'sonner';
 
 interface DealDetail {
   id: string;
   title: string;
   stage: string;
+  offerType?: OfferType;
 }
 
 export function DealDetailClient({ dealId }: { dealId: string }) {
+  const queryClient = useQueryClient();
   const { data: deal, isLoading } = useQuery({
     queryKey: ['deals', dealId],
     queryFn: () => api.get(`/deals/${dealId}`).then((r) => r as unknown as DealDetail),
+  });
+
+  const updateOffer = useMutation({
+    mutationFn: (offerType: OfferType) => api.put(`/deals/${dealId}`, { offerType }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals', dealId] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      toast.success('Type d\'offre enregistré');
+    },
+    onError: () => toast.error('Mise à jour impossible'),
   });
 
   return (
@@ -36,6 +50,30 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
           ← Pipeline
         </Link>
       </div>
+
+      <div className="rounded-xl border bg-card p-4 max-w-xl">
+        <label htmlFor="deal-offer-type" className="text-sm font-medium block mb-2">
+          Type d&apos;offre
+        </label>
+        <p className="text-xs text-muted-foreground mb-2">
+          Qualifie la mission pour le delivery (formation admin, conseil–IA, etc.) — voir la doc produit ; les phases
+          resteront une bibliothèque, pas une séquence figée.
+        </p>
+        <select
+          id="deal-offer-type"
+          className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
+          disabled={isLoading || updateOffer.isPending}
+          value={deal?.offerType ?? 'generic'}
+          onChange={(e) => updateOffer.mutate(e.target.value as OfferType)}
+        >
+          {OFFER_TYPES.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <DealContractTunnel dealId={dealId} />
     </div>
   );

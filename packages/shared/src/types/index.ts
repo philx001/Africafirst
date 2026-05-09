@@ -12,6 +12,16 @@ export type DealStage =
   | 'won'
   | 'lost';
 
+/** Aligné sur le référentiel phases / types de programmes (CRM admin, hors LMS). */
+export type OfferType =
+  | 'generic'
+  | 'formation_admin'
+  | 'conseil_ia'
+  | 'dev_automation'
+  | 'produit_physique'
+  | 'partenariat'
+  | 'autre';
+
 export type ProjectStatus =
   | 'not_started'
   | 'in_progress'

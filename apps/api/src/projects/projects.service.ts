@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { PaginationDto } from '../common/pipes/pagination.pipe';
-import { AuthUser, ProjectStatus } from '@crm/shared';
-import { IsOptional, IsString, IsArray, IsEnum, IsInt, Min, Max } from 'class-validator';
+import { AuthUser, ProjectStatus, OFFER_TYPE_VALUES, type OfferType } from '@crm/shared';
+import { IsOptional, IsString, IsArray, IsEnum, IsInt, Min, Max, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -19,6 +19,10 @@ export class CreateProjectDto {
   @ApiPropertyOptional() @IsOptional() @IsString() dealId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() contactId?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(100) progress?: number;
+  @ApiPropertyOptional({ enum: OFFER_TYPE_VALUES })
+  @IsOptional()
+  @IsIn([...OFFER_TYPE_VALUES])
+  offerType?: OfferType;
 }
 
 @Injectable()
@@ -26,8 +30,21 @@ export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateProjectDto, user: AuthUser) {
+    let offerType = dto.offerType;
+    if (offerType === undefined && dto.dealId) {
+      const deal = await this.prisma.deal.findFirst({
+        where: { id: dto.dealId, organizationId: user.organizationId },
+        select: { offerType: true },
+      });
+      if (deal) offerType = deal.offerType;
+    }
+
     return this.prisma.project.create({
-      data: { ...dto, organizationId: user.organizationId },
+      data: {
+        ...dto,
+        organizationId: user.organizationId,
+        ...(offerType !== undefined ? { offerType } : {}),
+      },
       include: { deal: true, contact: true },
     });
   }

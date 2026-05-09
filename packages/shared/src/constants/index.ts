@@ -2,6 +2,8 @@
 // Constantes partagées
 // ============================================================
 
+import type { OfferType } from '../types';
+
 export const DEAL_STAGES = [
   { id: 'lead', label: 'Lead', color: '#94a3b8' },
   { id: 'qualified', label: 'Qualifié', color: '#60a5fa' },
@@ -10,6 +12,19 @@ export const DEAL_STAGES = [
   { id: 'won', label: 'Gagné', color: '#4ade80' },
   { id: 'lost', label: 'Perdu', color: '#f87171' },
 ] as const;
+
+/** Types d'offre — pilotage admin (formation hors LMS, IA, dev, etc.) */
+export const OFFER_TYPES: { id: OfferType; label: string }[] = [
+  { id: 'generic', label: 'Non spécifié' },
+  { id: 'formation_admin', label: 'Formation (pilotage administratif)' },
+  { id: 'conseil_ia', label: 'Conseil, sensibilisation & implémentation IA' },
+  { id: 'dev_automation', label: 'Développement & automatisation' },
+  { id: 'produit_physique', label: 'Produit physique' },
+  { id: 'partenariat', label: 'Partenariat / affiliation' },
+  { id: 'autre', label: 'Autre prestation' },
+];
+
+export const OFFER_TYPE_VALUES: readonly OfferType[] = OFFER_TYPES.map((o) => o.id);
 
 export const PROJECT_STATUSES = [
   { id: 'not_started', label: 'Non démarré', color: '#94a3b8' },

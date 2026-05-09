@@ -2,8 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../config/prisma.service';
 import { AutomationsService } from '../automations/automations.service';
 import { PaginationDto } from '../common/pipes/pagination.pipe';
-import { AuthUser, DealStage } from '@crm/shared';
-import { IsOptional, IsString, IsArray, IsEnum } from 'class-validator';
+import { AuthUser, DealStage, OFFER_TYPE_VALUES, type OfferType } from '@crm/shared';
+import { IsOptional, IsString, IsArray, IsEnum, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -20,6 +20,10 @@ export class CreateDealDto {
   @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() tags?: string[];
   @ApiPropertyOptional() @IsOptional() @IsString() contactId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() accountId?: string;
+  @ApiPropertyOptional({ enum: OFFER_TYPE_VALUES })
+  @IsOptional()
+  @IsIn([...OFFER_TYPE_VALUES])
+  offerType?: OfferType;
 }
 
 @Injectable()

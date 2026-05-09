@@ -17,7 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { DEAL_STAGES, DealStage } from '@crm/shared';
+import { DEAL_STAGES, DealStage, OFFER_TYPES, type OfferType } from '@crm/shared';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
@@ -27,6 +27,7 @@ interface Deal {
   title: string;
   value?: number;
   stage: DealStage;
+  offerType?: OfferType;
   contact?: { firstName: string; lastName: string };
   account?: { name: string };
 }
@@ -60,6 +61,11 @@ function DealCard({ deal }: { deal: Deal }) {
         <ExternalLink className="w-3.5 h-3.5" />
       </Link>
       <p className="text-sm font-medium leading-snug pr-7">{deal.title}</p>
+      {deal.offerType && deal.offerType !== 'generic' && (
+        <p className="text-[10px] text-muted-foreground mt-1 uppercase tracking-wide">
+          {OFFER_TYPES.find((o) => o.id === deal.offerType)?.label ?? deal.offerType}
+        </p>
+      )}
       {deal.contact && (
         <p className="text-xs text-muted-foreground mt-1">
           {deal.contact.firstName} {deal.contact.lastName}

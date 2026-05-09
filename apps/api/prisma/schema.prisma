@@ -178,6 +178,7 @@ model Deal {
   closedAt    DateTime?
   description String?
   tags        String[]
+  offerType   OfferType @default(generic)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -198,6 +199,7 @@ model Deal {
 
   @@index([organizationId])
   @@index([stage, organizationId])
+  @@index([offerType, organizationId])
   @@index([contactId])
   @@index([accountId])
   @@map("deals")
@@ -308,6 +310,7 @@ model Project {
   dueDate     DateTime?
   completedAt DateTime?
   tags        String[]
+  offerType   OfferType @default(generic)
   budget      Decimal?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -327,6 +330,7 @@ model Project {
 
   @@index([organizationId])
   @@index([status, organizationId])
+  @@index([offerType, organizationId])
   @@index([dealId])
   @@map("projects")
 }
@@ -575,6 +579,17 @@ enum DealStage {
   negotiation
   won
   lost
+}
+
+// Nature d'offre (réf. docs/reference-phases-types-programmes-crm.md) — bibliothèque extensible
+enum OfferType {
+  generic
+  formation_admin
+  conseil_ia
+  dev_automation
+  produit_physique
+  partenariat
+  autre
 }
 
 enum ProjectStatus {

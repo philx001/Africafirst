@@ -33,6 +33,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/contacts') ||
     pathname.startsWith('/accounts') ||
     pathname.startsWith('/deals') ||
+    pathname.startsWith('/documents') ||
     pathname.startsWith('/projects') ||
     pathname.startsWith('/tasks') ||
     pathname.startsWith('/automations') ||

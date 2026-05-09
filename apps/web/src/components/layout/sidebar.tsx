@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   ChevronLeft,
+  FileText,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Contacts', href: '/contacts', icon: Users },
   { name: 'Entreprises', href: '/accounts', icon: Building2 },
   { name: 'Pipeline', href: '/deals', icon: TrendingUp },
+  { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'Projets', href: '/projects', icon: FolderKanban },
   { name: 'Tâches', href: '/tasks', icon: CheckSquare },
   { name: 'Automatisations', href: '/automations', icon: Zap },
