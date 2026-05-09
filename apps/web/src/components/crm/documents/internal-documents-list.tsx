@@ -20,15 +20,32 @@ interface DocRow {
   createdAt: string;
 }
 
-export function InternalDocumentsList() {
+export function InternalDocumentsList({
+  dealId,
+  contactId,
+  projectId,
+  libraryTitle = 'Bibliothèque',
+}: {
+  dealId?: string;
+  contactId?: string;
+  projectId?: string;
+  libraryTitle?: string;
+} = {}) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [desc, setDesc] = useState('');
   const [picked, setPicked] = useState<File | null>(null);
 
+  const scoped = Boolean(dealId || contactId || projectId);
+  const qs = new URLSearchParams();
+  if (dealId) qs.set('dealId', dealId);
+  if (contactId) qs.set('contactId', contactId);
+  if (projectId) qs.set('projectId', projectId);
+  const listSuffix = qs.toString() ? `?${qs}` : '';
+
   const { data: documents = [], isLoading } = useQuery({
-    queryKey: ['documents', 'internal'],
-    queryFn: () => api.get('/documents').then((r) => r as unknown as DocRow[]),
+    queryKey: ['documents', 'internal', dealId ?? null, contactId ?? null, projectId ?? null],
+    queryFn: () => api.get(`/documents${listSuffix}`).then((r) => r as unknown as DocRow[]),
   });
 
   const upload = useMutation({
@@ -36,6 +53,9 @@ export function InternalDocumentsList() {
       const form = new FormData();
       form.append('file', file);
       if (desc.trim()) form.append('description', desc.trim());
+      if (dealId) form.append('dealId', dealId);
+      if (contactId) form.append('contactId', contactId);
+      if (projectId) form.append('projectId', projectId);
       return api.post('/documents/upload', form);
     },
     onSuccess: () => {
@@ -101,13 +121,14 @@ export function InternalDocumentsList() {
           {upload.isPending ? 'Envoi…' : 'Envoyer vers le stockage'}
         </button>
         <p className="text-xs text-muted-foreground">
-          Les liaisons deal / projet / contact se font depuis l&apos;API ou de prochains formulaires ; ici envoi générique
-          au tenant.
+          {scoped
+            ? 'Les fichiers sont liés automatiquement à cette fiche.'
+            : 'Sans contexte, les fichiers sont rattachés au tenant uniquement ; utilisez une fiche deal, contact ou projet pour les lier.'}
         </p>
       </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="px-4 py-3 border-b font-medium text-sm">Bibliothèque</div>
+        <div className="px-4 py-3 border-b font-medium text-sm">{libraryTitle}</div>
         {isLoading ? (
           <p className="p-6 text-sm text-muted-foreground">Chargement…</p>
         ) : documents.length === 0 ? (

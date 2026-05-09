@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { DealContractTunnel } from '@/components/crm/deals/deal-contract-tunnel';
+import { InternalDocumentsList } from '@/components/crm/documents/internal-documents-list';
 import { OFFER_TYPES, type OfferType } from '@crm/shared';
 import { toast } from 'sonner';
 
@@ -73,6 +74,8 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
           ))}
         </select>
       </div>
+
+      <InternalDocumentsList dealId={dealId} libraryTitle="Documents du deal" />
 
       <DealContractTunnel dealId={dealId} />
     </div>

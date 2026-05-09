@@ -9,7 +9,8 @@ export default function DocumentsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Documents</h1>
         <p className="text-muted-foreground">
-          Fichiers du tenant (Supabase Storage). Liaison deal / projet / contact : à affiner depuis les fiches métier.
+          Fichiers du tenant (Supabase Storage). Vous pouvez aussi uploader depuis les fiches deal, projet ou contact
+          pour lier automatiquement les pièces.
         </p>
       </div>
       <InternalDocumentsList />

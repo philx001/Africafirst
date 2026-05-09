@@ -54,7 +54,20 @@ export class ContactsService {
       include: {
         account: true,
         deals: { orderBy: { createdAt: 'desc' }, take: 5 },
-        interactions: { orderBy: { occurredAt: 'desc' }, take: 10 },
+        projects: {
+          orderBy: { createdAt: 'desc' },
+          take: 8,
+          select: { id: true, name: true, status: true },
+        },
+        interactions: {
+          orderBy: { occurredAt: 'desc' },
+          take: 20,
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true } },
+            deal: { select: { id: true, title: true } },
+            project: { select: { id: true, name: true } },
+          },
+        },
         documents: { orderBy: { createdAt: 'desc' }, take: 10 },
       },
     });

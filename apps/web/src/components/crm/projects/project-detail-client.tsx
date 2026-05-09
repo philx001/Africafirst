@@ -12,6 +12,7 @@ import {
 } from '@crm/shared';
 import { toast } from 'sonner';
 import { formatRelative } from '@/lib/utils';
+import { InternalDocumentsList } from '@/components/crm/documents/internal-documents-list';
 
 interface ProjectPhaseRow {
   id: string;
@@ -190,6 +191,8 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
           </ul>
         )}
       </section>
+
+      <InternalDocumentsList projectId={projectId} libraryTitle="Documents du projet" />
 
       {/* Interactions */}
       <section className="rounded-xl border bg-card p-5 space-y-4">

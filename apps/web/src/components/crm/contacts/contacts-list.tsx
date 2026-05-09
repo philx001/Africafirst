@@ -26,7 +26,9 @@ export function ContactsList() {
   const { data, isLoading } = useQuery({
     queryKey: ['contacts', { page, search }],
     queryFn: () =>
-      api.get(`/contacts?page=${page}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ''}`).then((r: unknown) => (r as { data: { data: Contact[]; meta: { total: number; totalPages: number } } }).data),
+      api
+        .get(`/contacts?page=${page}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ''}`)
+        .then((r: unknown) => r as { data: Contact[]; meta: { total: number; totalPages: number } }),
     placeholderData: (prev) => prev,
   });
 
