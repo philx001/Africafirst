@@ -24,11 +24,13 @@ export function InternalDocumentsList({
   dealId,
   contactId,
   projectId,
+  accountId,
   libraryTitle = 'Bibliothèque',
 }: {
   dealId?: string;
   contactId?: string;
   projectId?: string;
+  accountId?: string;
   libraryTitle?: string;
 } = {}) {
   const queryClient = useQueryClient();
@@ -36,15 +38,16 @@ export function InternalDocumentsList({
   const [desc, setDesc] = useState('');
   const [picked, setPicked] = useState<File | null>(null);
 
-  const scoped = Boolean(dealId || contactId || projectId);
+  const scoped = Boolean(dealId || contactId || projectId || accountId);
   const qs = new URLSearchParams();
   if (dealId) qs.set('dealId', dealId);
   if (contactId) qs.set('contactId', contactId);
   if (projectId) qs.set('projectId', projectId);
+  if (accountId) qs.set('accountId', accountId);
   const listSuffix = qs.toString() ? `?${qs}` : '';
 
   const { data: documents = [], isLoading } = useQuery({
-    queryKey: ['documents', 'internal', dealId ?? null, contactId ?? null, projectId ?? null],
+    queryKey: ['documents', 'internal', dealId ?? null, contactId ?? null, projectId ?? null, accountId ?? null],
     queryFn: () => api.get(`/documents${listSuffix}`).then((r) => r as unknown as DocRow[]),
   });
 
@@ -56,6 +59,7 @@ export function InternalDocumentsList({
       if (dealId) form.append('dealId', dealId);
       if (contactId) form.append('contactId', contactId);
       if (projectId) form.append('projectId', projectId);
+      if (accountId) form.append('accountId', accountId);
       return api.post('/documents/upload', form);
     },
     onSuccess: () => {
@@ -88,10 +92,10 @@ export function InternalDocumentsList({
 
   const ctx = (d: DocRow) => {
     const parts: string[] = [];
-    if (d.dealId) parts.push(`Deal ${d.dealId.slice(0, 8)}…`);
-    if (d.projectId) parts.push(`Projet ${d.projectId.slice(0, 8)}…`);
-    if (d.contactId) parts.push(`Contact ${d.contactId.slice(0, 8)}…`);
-    if (d.accountId) parts.push(`Entreprise ${d.accountId.slice(0, 8)}…`);
+    if (d.dealId) parts.push(`Deal …${d.dealId.slice(-6)}`);
+    if (d.projectId) parts.push(`Projet …${d.projectId.slice(-6)}`);
+    if (d.contactId) parts.push(`Contact …${d.contactId.slice(-6)}`);
+    if (d.accountId) parts.push(`Entreprise …${d.accountId.slice(-6)}`);
     return parts.length ? parts.join(' · ') : '—';
   };
 

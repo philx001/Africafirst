@@ -34,14 +34,15 @@ export class DocumentsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lister les documents (filtrable par contact, projet, deal)' })
+  @ApiOperation({ summary: 'Lister les documents (filtrable par contact, projet, deal, entreprise)' })
   findAll(
     @CurrentUser() user: AuthUser,
     @Query('contactId') contactId?: string,
     @Query('projectId') projectId?: string,
     @Query('dealId') dealId?: string,
+    @Query('accountId') accountId?: string,
   ) {
-    return this.documentsService.findAll(user.organizationId, { contactId, projectId, dealId });
+    return this.documentsService.findAll(user.organizationId, { contactId, projectId, dealId, accountId });
   }
 
   @Get(':id/signed-url')

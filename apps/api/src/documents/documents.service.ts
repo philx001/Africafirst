@@ -50,7 +50,7 @@ export class DocumentsService {
 
   async findAll(
     organizationId: string,
-    filters?: { contactId?: string; projectId?: string; dealId?: string },
+    filters?: { contactId?: string; projectId?: string; dealId?: string; accountId?: string },
   ) {
     return this.prisma.document.findMany({
       where: {
@@ -58,6 +58,7 @@ export class DocumentsService {
         ...(filters?.contactId && { contactId: filters.contactId }),
         ...(filters?.projectId && { projectId: filters.projectId }),
         ...(filters?.dealId && { dealId: filters.dealId }),
+        ...(filters?.accountId && { accountId: filters.accountId }),
       },
       orderBy: { createdAt: 'desc' },
     });

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { ArrowLeft, Building2, Mail, Phone, Users, Handshake } from 'lucide-react';
+import { InternalDocumentsList } from '@/components/crm/documents/internal-documents-list';
 
 interface AccountDetail {
   id: string;
@@ -143,13 +144,17 @@ export function AccountDetail({ accountId }: { accountId: string }) {
         </div>
       )}
 
+      <InternalDocumentsList accountId={accountId} libraryTitle="Documents de l'entreprise" />
+
       {data.deals.length > 0 && (
         <div className="rounded-xl border bg-card overflow-hidden">
           <div className="px-4 py-3 border-b font-medium text-sm">Deals récents</div>
           <ul className="divide-y">
             {data.deals.map((d) => (
               <li key={d.id} className="px-4 py-3 flex justify-between gap-2 text-sm">
-                <span className="font-medium">{d.title}</span>
+                <Link href={`/deals/${d.id}`} className="font-medium hover:text-primary">
+                  {d.title}
+                </Link>
                 <span className="text-muted-foreground capitalize">{d.stage}</span>
               </li>
             ))}

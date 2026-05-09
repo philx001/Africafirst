@@ -106,11 +106,25 @@ export function TopBar({ user: _user }: { user: User }) {
                   <p className="p-4 text-sm text-muted-foreground text-center">Aucune notification</p>
                 ) : (
                   notifications.map((n) => (
-                    <div key={n.id} className="p-3 hover:bg-muted/30 transition-colors">
+                    <button
+                      key={n.id}
+                      type="button"
+                      className="w-full text-left p-3 hover:bg-muted/30 transition-colors border-0 bg-transparent cursor-pointer"
+                      onClick={async () => {
+                        try {
+                          await api.patch(`/notifications/${n.id}/read`);
+                          await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                          await queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                      title="Marquer comme lu"
+                    >
                       <p className="text-sm font-medium">{n.title}</p>
                       {n.body && <p className="text-xs text-muted-foreground mt-0.5">{n.body}</p>}
                       <p className="text-xs text-muted-foreground mt-1">{formatRelative(n.createdAt)}</p>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>
