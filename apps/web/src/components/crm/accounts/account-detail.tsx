@@ -53,13 +53,21 @@ export function AccountDetail({ accountId }: { accountId: string }) {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <Link
-        href="/accounts"
-        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Entreprises
-      </Link>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Link
+          href="/accounts"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Entreprises
+        </Link>
+        <Link
+          href={`/accounts/${data.id}/edit`}
+          className="text-sm px-3 py-1.5 rounded-lg border hover:bg-muted transition-colors self-start sm:self-auto"
+        >
+          Modifier
+        </Link>
+      </div>
 
       <div className="rounded-xl border bg-card p-6 space-y-4">
         <div className="flex items-start gap-4">
