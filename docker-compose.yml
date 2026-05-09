@@ -1,0 +1,108 @@
+version: '3.9'
+
+# ============================================================
+# CRM Africa First — Services locaux
+# PostgreSQL est géré par Supabase (cloud)
+# Ce fichier fournit Redis (BullMQ) + MinIO (stockage local optionnel)
+# ============================================================
+
+services:
+  # ----------------------------------------------------------
+  # REDIS — File d'attente BullMQ pour les automatisations
+  # ----------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------
+  # MINIO — Stockage objets local (alternative à Supabase Storage)
+  # Accessible sur http://localhost:9001 (console admin)
+  # ----------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: crm-minio
+    restart: unless-stopped
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ----------------------------------------------------------
+  # API — Backend NestJS
+  # ----------------------------------------------------------
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    container_name: crm-api
+    restart: unless-stopped
+    ports:
+      - '${API_PORT:-3001}:3001'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./apps/api:/app
+      - /app/node_modules
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: npm run start:dev
+
+  # ----------------------------------------------------------
+  # WEB — Frontend Next.js
+  # ----------------------------------------------------------
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      target: development
+    container_name: crm-web
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://api:3001
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - api
+
+volumes:
+  redis-data:
+    driver: local
+  minio-data:
+    driver: local
+
+networks:
+  default:
+    name: crm-network

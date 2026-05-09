@@ -1,0 +1,641 @@
+// ============================================================
+// CRM Africa First — Schéma Prisma
+// Base de données : Supabase (PostgreSQL)
+// Toutes les tables incluent organizationId pour l'isolation multi-tenant
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_DIRECT_URL")
+}
+
+// ============================================================
+// ORGANISATION (tenant racine)
+// ============================================================
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      PlanType @default(free)
+  settings  Json     @default("{}")
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  accounts       Account[]
+  contacts       Contact[]
+  deals          Deal[]
+  projects       Project[]
+  tasks          Task[]
+  interactions   Interaction[]
+  documents      Document[]
+  notifications  Notification[]
+  automationRules AutomationRule[]
+  workflowLogs   WorkflowLog[]
+  messages       Message[]
+  quotes         Quote[]
+  contracts      Contract[]
+
+  @@map("organizations")
+}
+
+// ============================================================
+// UTILISATEUR
+// ============================================================
+
+model User {
+  id           String   @id @default(cuid())
+  supabaseId   String   @unique // lien avec auth.users de Supabase
+  email        String
+  firstName    String?
+  lastName     String?
+  avatarUrl    String?
+  role         UserRole @default(member)
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Lien optionnel vers un contact (pour les utilisateurs de type client)
+  contactId String? @unique
+  contact   Contact? @relation("UserContact", fields: [contactId], references: [id])
+
+  assignedTasks    Task[]         @relation("TaskAssignee")
+  interactions     Interaction[]
+  notifications    Notification[]
+  sentMessages     Message[]      @relation("MessageSender")
+  receivedMessages Message[]      @relation("MessageRecipient")
+
+  @@unique([email, organizationId])
+  @@index([organizationId])
+  @@index([supabaseId])
+  @@map("users")
+}
+
+// ============================================================
+// ENTREPRISE (Account)
+// ============================================================
+
+model Account {
+  id          String  @id @default(cuid())
+  name        String
+  industry    String?
+  website     String?
+  phone       String?
+  email       String?
+  address     String?
+  city        String?
+  country     String?
+  employeeCount Int?
+  annualRevenue Decimal?
+  description String?
+  tags        String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  contacts     Contact[]
+  deals        Deal[]
+  documents    Document[]
+  quotes       Quote[]
+  contracts    Contract[]
+
+  @@index([organizationId])
+  @@index([name])
+  @@map("accounts")
+}
+
+// ============================================================
+// CONTACT
+// ============================================================
+
+model Contact {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  email       String?
+  phone       String?
+  mobile      String?
+  jobTitle    String?
+  department  String?
+  linkedinUrl String?
+  address     String?
+  city        String?
+  country     String?
+  tags        String[]
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  deals        Deal[]
+  interactions Interaction[]
+  documents    Document[]
+  projects     Project[]
+  messages     Message[]
+  quotes       Quote[]
+  contracts    Contract[]
+
+  // Un contact peut avoir un compte utilisateur (portail client)
+  user User? @relation("UserContact")
+
+  @@index([organizationId])
+  @@index([email, organizationId])
+  @@index([accountId])
+  @@map("contacts")
+}
+
+// ============================================================
+// DEAL (opportunité commerciale)
+// ============================================================
+
+model Deal {
+  id          String    @id @default(cuid())
+  title       String
+  stage       DealStage @default(lead)
+  value       Decimal?
+  currency    String    @default("EUR")
+  probability Int?      // 0-100
+  expectedCloseAt DateTime?
+  closedAt    DateTime?
+  description String?
+  tags        String[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  projects     Project[]
+  interactions Interaction[]
+  documents    Document[]
+  quotes       Quote[]
+  contracts    Contract[]
+
+  @@index([organizationId])
+  @@index([stage, organizationId])
+  @@index([contactId])
+  @@index([accountId])
+  @@map("deals")
+}
+
+// ============================================================
+// DEVIS (proposition commerciale)
+// ============================================================
+
+model Quote {
+  id             String      @id @default(cuid())
+  title          String
+  reference      String?
+  status         QuoteStatus @default(draft)
+  currency       String      @default("EUR")
+  totalAmount    Decimal?
+  taxAmount      Decimal?
+  lineItems      Json        @default("[]")
+  notes          String?
+  validUntil     DateTime?
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  rejectedAt     DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  contracts Contract[]
+
+  @@index([organizationId])
+  @@index([dealId])
+  @@index([status, organizationId])
+  @@unique([organizationId, reference])
+  @@map("quotes")
+}
+
+// ============================================================
+// CONTRAT (tunnel jusqu'à la signature côté portail)
+// ============================================================
+
+model Contract {
+  id     String         @id @default(cuid())
+  title  String
+  status ContractStatus @default(draft)
+  body   String? // Texte ou résumé affiché au signataire (MVP)
+  value  Decimal?
+  currency String       @default("EUR")
+
+  documentId String? @unique
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  portalToken          String?   @unique
+  portalTokenExpiresAt DateTime?
+  sentForSignatureAt   DateTime?
+  signedAt             DateTime?
+  signedByContactId    String?
+  signatoryIp          String?
+  signatoryUserAgent   String?
+  signatureMetadata    Json      @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  quoteId String?
+  quote   Quote?  @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([dealId])
+  @@index([contactId])
+  @@index([status, organizationId])
+  @@map("contracts")
+}
+
+// ============================================================
+// PROJET
+// ============================================================
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(not_started)
+  progress    Int           @default(0) // 0-100
+  startDate   DateTime?
+  dueDate     DateTime?
+  completedAt DateTime?
+  tags        String[]
+  budget      Decimal?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  tasks     Task[]
+  documents Document[]
+  messages  Message[]
+
+  @@index([organizationId])
+  @@index([status, organizationId])
+  @@index([dealId])
+  @@map("projects")
+}
+
+// ============================================================
+// TÂCHE (avec sous-tâches via self-relation)
+// ============================================================
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(todo)
+  priority    Priority   @default(medium)
+  dueAt       DateTime?
+  completedAt DateTime?
+  estimatedHours Decimal?
+  loggedHours    Decimal?
+  tags        String[]
+  order       Int        @default(0) // ordre dans le kanban
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  assigneeId String?
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  // Auto-relation pour les sous-tâches
+  parentTaskId String?
+  parentTask   Task?   @relation("SubTasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subTasks     Task[]  @relation("SubTasks")
+
+  @@index([organizationId])
+  @@index([projectId, status])
+  @@index([assigneeId])
+  @@index([parentTaskId])
+  @@map("tasks")
+}
+
+// ============================================================
+// INTERACTION (email, appel, réunion, note)
+// ============================================================
+
+model Interaction {
+  id          String          @id @default(cuid())
+  type        InteractionType
+  subject     String?
+  notes       String?
+  occurredAt  DateTime        @default(now())
+  duration    Int?            // en minutes
+  outcome     String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([dealId])
+  @@index([occurredAt])
+  @@map("interactions")
+}
+
+// ============================================================
+// DOCUMENT
+// ============================================================
+
+model Document {
+  id          String   @id @default(cuid())
+  filename    String
+  mimeType    String
+  size        Int      // en octets
+  storagePath String   // chemin dans Supabase Storage
+  bucket      String   @default("documents")
+  description String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  contract Contract?
+
+  @@index([organizationId])
+  @@index([contactId])
+  @@index([projectId])
+  @@map("documents")
+}
+
+// ============================================================
+// NOTIFICATION
+// ============================================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  body      String?
+  payload   Json             @default("{}")
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([organizationId])
+  @@map("notifications")
+}
+
+// ============================================================
+// MESSAGE (messagerie interne / portail client)
+// ============================================================
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  senderId String
+  sender   User   @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  recipientId String
+  recipient   User   @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  // Contexte du message (projet ou contact)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([senderId, recipientId])
+  @@index([projectId])
+  @@map("messages")
+}
+
+// ============================================================
+// RÈGLE D'AUTOMATISATION
+// ============================================================
+
+model AutomationRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  trigger     String   // ex: 'deal.won'
+  conditions  Json     @default("[]") // array de conditions JSON
+  actions     Json     @default("[]") // array d'actions JSON
+  isEnabled   Boolean  @default(true)
+  runCount    Int      @default(0)
+  lastRunAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  workflowLogs WorkflowLog[]
+
+  @@index([organizationId, isEnabled])
+  @@index([trigger, isEnabled])
+  @@map("automation_rules")
+}
+
+// ============================================================
+// LOG D'EXÉCUTION DES AUTOMATISATIONS
+// ============================================================
+
+model WorkflowLog {
+  id         String          @id @default(cuid())
+  status     WorkflowStatus
+  input      Json
+  output     Json?
+  error      String?
+  executedAt DateTime        @default(now())
+  durationMs Int?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  ruleId String
+  rule   AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([ruleId, executedAt])
+  @@map("workflow_logs")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  admin
+  member
+  client
+}
+
+enum PlanType {
+  free
+  starter
+  pro
+  enterprise
+}
+
+enum DealStage {
+  lead
+  qualified
+  proposal
+  negotiation
+  won
+  lost
+}
+
+enum ProjectStatus {
+  not_started
+  in_progress
+  on_hold
+  completed
+  cancelled
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  in_review
+  done
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum InteractionType {
+  email
+  call
+  meeting
+  note
+}
+
+enum QuoteStatus {
+  draft
+  sent
+  accepted
+  rejected
+  expired
+}
+
+enum ContractStatus {
+  draft
+  sent_for_signature
+  signed
+  cancelled
+}
+
+enum NotificationType {
+  deal_updated
+  task_assigned
+  task_completed
+  project_updated
+  document_uploaded
+  message_received
+  automation_triggered
+  mention
+  contract_pending_signature
+  contract_signed
+}
+
+enum WorkflowStatus {
+  success
+  failed
+  skipped
+}
