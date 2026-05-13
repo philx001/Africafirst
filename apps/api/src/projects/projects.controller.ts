@@ -4,6 +4,7 @@ import { ProjectsService, CreateProjectDto, UpdateProjectPhaseDto } from './proj
 import { PaginationDto } from '../common/pipes/pagination.pipe';
 import { CurrentUser, Roles } from '../common/decorators/auth.decorator';
 import { AuthUser, ProjectStatus } from '@crm/shared';
+import { ApplyProjectTemplateDto } from '../project-templates/project-templates.service';
 
 @ApiTags('projects')
 @ApiBearerAuth('supabase-jwt')
@@ -24,8 +25,9 @@ export class ProjectsController {
     @Query() pagination: PaginationDto,
     @CurrentUser() user: AuthUser,
     @Query('status') status?: ProjectStatus,
+    @Query('dealId') dealId?: string,
   ) {
-    return this.projectsService.findAll(pagination, user, status);
+    return this.projectsService.findAll(pagination, user, status, dealId);
   }
 
   @Post(':id/phases/bootstrap')
@@ -33,6 +35,13 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Créer les phases par défaut si absentes (idempotent)' })
   bootstrapPhases(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.projectsService.bootstrapPhases(id, user);
+  }
+
+  @Post(':id/phases/apply-template')
+  @Roles('admin', 'member')
+  @ApiOperation({ summary: 'Appliquer un modèle de phases au projet (si aucune phase existante)' })
+  applyTemplate(@Param('id') id: string, @Body() dto: ApplyProjectTemplateDto, @CurrentUser() user: AuthUser) {
+    return this.projectsService.applyTemplate(id, dto, user);
   }
 
   @Patch(':id/phases/:phaseId')

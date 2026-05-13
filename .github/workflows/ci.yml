@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build Shared
+        run: npm run build -w @crm/shared
+
+      - name: Typecheck Shared
+        run: npm exec -w @crm/shared -- tsc --noEmit
+
+      - name: Typecheck API
+        run: npm exec -w @crm/api -- tsc --noEmit
+
+      - name: Typecheck Web
+        run: npm exec -w @crm/web -- tsc --noEmit
+
+      - name: Lint API
+        run: npm run lint -w @crm/api
+
+      - name: Lint Web
+        run: npm run lint -w @crm/web
+
+      - name: Test API
+        run: npm run test -w @crm/api -- --runInBand

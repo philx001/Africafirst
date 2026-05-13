@@ -13,6 +13,8 @@ interface DealDetail {
   title: string;
   stage: string;
   offerType?: OfferType;
+  contactId?: string | null;
+  contact?: { firstName?: string | null; lastName?: string | null; email?: string | null } | null;
 }
 
 export function DealDetailClient({ dealId }: { dealId: string }) {
@@ -76,6 +78,32 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
       </div>
 
       <InternalDocumentsList dealId={dealId} libraryTitle="Documents du deal" />
+
+      <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm space-y-2">
+        <h2 className="font-semibold text-base">Tunnel Devis → Contrat → Onboarding</h2>
+        <ol className="list-decimal pl-5 space-y-1 text-muted-foreground">
+          <li>Créer un devis, l&apos;envoyer au contact, puis l&apos;accepter (ou le faire accepter côté portail lorsque prévu).</li>
+          <li>Générer le contrat à partir du devis accepté, puis l&apos;envoyer pour signature (portail client).</li>
+          <li>Après signature : deal en <strong>gagné</strong>, projet « Onboarding » avec phases métier créé automatiquement.</li>
+        </ol>
+        {!isLoading && !deal?.contactId && (
+          <p className="text-amber-800 dark:text-amber-400 text-xs pt-1">
+            Aucun contact lié au deal — associez un contact sur le kanban ou en mettant à jour le deal pour pouvoir{' '}
+            <strong>envoyer le devis</strong> et <strong>signer le contrat</strong>.
+          </p>
+        )}
+        {!isLoading && deal?.contactId && deal.contact && (
+          <p className="text-xs text-muted-foreground">
+            Contact&nbsp;:{' '}
+            <strong>
+              {[deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(' ') ||
+                deal.contact.email ||
+                '—'}
+            </strong>
+            {deal.contact.email ? <> ({deal.contact.email})</> : null}
+          </p>
+        )}
+      </div>
 
       <DealContractTunnel dealId={dealId} />
     </div>

@@ -55,7 +55,7 @@ function DealCard({ deal }: { deal: Deal }) {
       <Link
         href={`/deals/${deal.id}`}
         className="absolute top-2 right-2 p-1 rounded-md hover:bg-muted z-10 text-muted-foreground hover:text-foreground"
-        title="Devis et contrat"
+        title="Ouvrir la fiche du deal : devis, contrat, onboarding"
         onPointerDown={(e) => e.stopPropagation()}
       >
         <ExternalLink className="w-3.5 h-3.5" />
@@ -114,7 +114,7 @@ export function DealsKanban() {
 
   const { data: kanban = {}, isLoading } = useQuery({
     queryKey: ['deals', 'kanban'],
-    queryFn: () => api.get('/deals/kanban').then((r: unknown) => (r as { data: Record<string, Deal[]> }).data),
+    queryFn: () => api.get('/deals/kanban').then((r: unknown) => r as Record<string, Deal[]>),
   });
 
   const updateStageMutation = useMutation({

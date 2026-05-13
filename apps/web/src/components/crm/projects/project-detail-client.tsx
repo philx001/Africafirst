@@ -11,16 +11,19 @@ import {
   type ProjectPhaseStatus,
 } from '@crm/shared';
 import { toast } from 'sonner';
-import { formatRelative } from '@/lib/utils';
+import { formatDate, formatRelative } from '@/lib/utils';
 import { InternalDocumentsList } from '@/components/crm/documents/internal-documents-list';
 
 interface ProjectPhaseRow {
   id: string;
   key: string;
   label: string;
+  description?: string | null;
   status: string;
   sortOrder: number;
   completedAt?: string | null;
+  resolvedAt?: string | null;
+  statusReason?: string | null;
 }
 
 interface ProjectDetail {
@@ -44,6 +47,12 @@ interface InteractionRow {
   notes?: string | null;
   occurredAt: string;
   user?: { firstName?: string | null; lastName?: string | null } | null;
+}
+
+const TERMINAL_PHASE_STATUSES = new Set(['completed', 'skipped', 'not_applicable']);
+
+function isTerminalPhase(status: string) {
+  return TERMINAL_PHASE_STATUSES.has(status);
 }
 
 export function ProjectDetailClient({ projectId }: { projectId: string }) {
@@ -100,6 +109,14 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
 
   const statusLabel =
     PROJECT_STATUSES.find((s) => s.id === project?.status)?.label ?? project?.status ?? '—';
+  const phaseStats = project
+    ? {
+        total: project.phases.length,
+        resolved: project.phases.filter((phase) => isTerminalPhase(phase.status)).length,
+        active: project.phases.filter((phase) => !isTerminalPhase(phase.status)).length,
+      }
+    : { total: 0, resolved: 0, active: 0 };
+  const phaseProgress = phaseStats.total > 0 ? Math.round((phaseStats.resolved / phaseStats.total) * 100) : 0;
 
   return (
     <div className="space-y-8 max-w-5xl">
@@ -138,9 +155,9 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
       <section className="rounded-xl border bg-card p-5 space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Phases & onboarding</h2>
+            <h2 className="text-lg font-semibold">Checklist onboarding & delivery</h2>
             <p className="text-xs text-muted-foreground">
-              Jalons pilotage interne — marquez ignoré ou N/A selon le périmètre réel.
+              Jalons pilotage interne — marquez terminé, ignoré ou N/A selon le périmètre réel.
             </p>
           </div>
           {project && project.phases.length === 0 && (
@@ -161,34 +178,74 @@ export function ProjectDetailClient({ projectId }: { projectId: string }) {
               : 'Chargement…'}
           </p>
         ) : (
-          <ul className="divide-y rounded-lg border">
-            {project.phases.map((phase) => {
-              const cfg = PROJECT_PHASE_STATUSES.find((s) => s.id === phase.status);
-              return (
-                <li key={phase.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3">
-                  <div>
-                    <p className="font-medium text-sm">{phase.label}</p>
-                    <p className="text-xs text-muted-foreground">Clé : {phase.key}</p>
-                  </div>
-                  <select
-                    className="text-sm border rounded-md px-2 py-1.5 bg-background min-w-[11rem]"
-                    value={phase.status}
-                    onChange={(e) =>
-                      updatePhase.mutate({ phaseId: phase.id, status: e.target.value as ProjectPhaseStatus })
-                    }
-                    disabled={updatePhase.isPending}
-                    style={cfg ? { borderColor: cfg.color } : undefined}
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">Avancement des jalons</p>
+                  <p className="text-xs text-muted-foreground">
+                    {phaseStats.resolved}/{phaseStats.total} jalons résolus · {phaseStats.active} en cours ou à traiter
+                  </p>
+                </div>
+                <span className="text-sm font-semibold">{phaseProgress}%</span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${phaseProgress}%` }} />
+              </div>
+            </div>
+
+            <ul className="divide-y rounded-lg border">
+              {project.phases.map((phase) => {
+                const cfg = PROJECT_PHASE_STATUSES.find((s) => s.id === phase.status);
+                const resolvedAt = phase.completedAt ?? phase.resolvedAt;
+                return (
+                  <li
+                    key={phase.id}
+                    className={[
+                      'flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between',
+                      isTerminalPhase(phase.status) ? 'bg-muted/10' : '',
+                    ].join(' ')}
                   >
-                    {PROJECT_PHASE_STATUSES.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </li>
-              );
-            })}
-          </ul>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-sm">{phase.label}</p>
+                        {cfg && (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                            {cfg.label}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Clé : {phase.key}</p>
+                      {phase.description && (
+                        <p className="mt-1 text-xs text-muted-foreground">{phase.description}</p>
+                      )}
+                      {resolvedAt && (
+                        <p className="mt-1 text-xs text-muted-foreground">Résolu le {formatDate(resolvedAt)}</p>
+                      )}
+                      {phase.statusReason && (
+                        <p className="mt-1 text-xs text-muted-foreground">Motif : {phase.statusReason}</p>
+                      )}
+                    </div>
+                    <select
+                      className="text-sm border rounded-md px-2 py-1.5 bg-background min-w-[11rem]"
+                      value={phase.status}
+                      onChange={(e) =>
+                        updatePhase.mutate({ phaseId: phase.id, status: e.target.value as ProjectPhaseStatus })
+                      }
+                      disabled={updatePhase.isPending}
+                      style={cfg ? { borderColor: cfg.color } : undefined}
+                    >
+                      {PROJECT_PHASE_STATUSES.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </section>
 

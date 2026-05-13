@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Param, Body, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ClientPortalService } from './client-portal.service';
+import { TicketsService, CreateClientTicketDto } from '../tickets/tickets.service';
 import { CurrentUser, Roles } from '../common/decorators/auth.decorator';
 import { AuthUser } from '@crm/shared';
 import { Request } from 'express';
@@ -10,7 +11,10 @@ import { Request } from 'express';
 @Roles('client')
 @Controller('client')
 export class ClientPortalController {
-  constructor(private readonly clientPortalService: ClientPortalService) {}
+  constructor(
+    private readonly clientPortalService: ClientPortalService,
+    private readonly ticketsService: TicketsService,
+  ) {}
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Dashboard client — résumé projets, documents, messages' })
@@ -22,6 +26,12 @@ export class ClientPortalController {
   @ApiOperation({ summary: 'Projets du client avec tâches' })
   getProjects(@CurrentUser() user: AuthUser) {
     return this.clientPortalService.getProjects(user);
+  }
+
+  @Get('projects/:id')
+  @ApiOperation({ summary: 'Détail d’un projet client' })
+  getProject(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.clientPortalService.getProject(id, user);
   }
 
   @Get('documents')
@@ -78,5 +88,23 @@ export class ClientPortalController {
     @Req() req: Request,
   ) {
     return this.clientPortalService.signContract(id, user, body.acknowledge, req);
+  }
+
+  @Get('tickets')
+  @ApiOperation({ summary: 'Tickets du portail client' })
+  getTickets(@CurrentUser() user: AuthUser) {
+    return this.ticketsService.findAllForPortal(user);
+  }
+
+  @Get('tickets/:id')
+  @ApiOperation({ summary: 'Détail d’un ticket (portail client)' })
+  getTicket(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ticketsService.findOne(id, user);
+  }
+
+  @Post('tickets')
+  @ApiOperation({ summary: 'Créer un ticket depuis le portail' })
+  createTicket(@CurrentUser() user: AuthUser, @Body() body: CreateClientTicketDto) {
+    return this.ticketsService.createFromPortal(body, user);
   }
 }

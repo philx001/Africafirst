@@ -49,6 +49,10 @@ export class UsersService {
     return user;
   }
 
+  async findMe(user: AuthUser) {
+    return this.findOne(user.id, user.organizationId);
+  }
+
   async updateRole(id: string, role: UserRole, actor: AuthUser) {
     await this.findOne(id, actor.organizationId);
 
@@ -58,11 +62,16 @@ export class UsersService {
       data: { role },
     });
 
-    // Mettre à jour les app_metadata dans Supabase Auth
+    // Mettre à jour le rôle sans écraser organization_id/contact_id dans app_metadata.
     const supabaseUser = await this.prisma.user.findUnique({ where: { id }, select: { supabaseId: true } });
     if (supabaseUser) {
-      await this.supabase.getAdminClient().auth.admin.updateUserById(supabaseUser.supabaseId, {
-        app_metadata: { user_role: role },
+      const adminClient = this.supabase.getAdminClient();
+      const { data } = await adminClient.auth.admin.getUserById(supabaseUser.supabaseId);
+      await adminClient.auth.admin.updateUserById(supabaseUser.supabaseId, {
+        app_metadata: {
+          ...(data.user?.app_metadata ?? {}),
+          user_role: role,
+        },
       });
     }
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, FolderKanban, FileText, MessageSquare, LogOut, FileSignature } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, FileText, MessageSquare, LogOut, FileSignature, Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
@@ -11,6 +11,7 @@ const navigation = [
   { name: 'Mon espace', href: '/client/dashboard', icon: LayoutDashboard },
   { name: 'Mes projets', href: '/client/projects', icon: FolderKanban },
   { name: 'Contrats & signatures', href: '/client/contracts', icon: FileSignature },
+  { name: 'Support / tickets', href: '/client/tickets', icon: Ticket },
   { name: 'Documents', href: '/client/documents', icon: FileText },
   { name: 'Messages', href: '/client/messages', icon: MessageSquare },
 ];

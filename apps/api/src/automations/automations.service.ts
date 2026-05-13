@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import { Prisma, Priority } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { AuthUser, AutomationTrigger } from '@crm/shared';
 import { IsOptional, IsString, IsBoolean } from 'class-validator';
@@ -78,6 +79,110 @@ export class AutomationsService {
     return { message: 'Règle supprimée' };
   }
 
+  async ensureProviderDefaultRules(user: AuthUser) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { settings: true },
+    });
+    const settings = (org?.settings as Record<string, unknown>) || {};
+    const integrationWebhookUrl =
+      (settings.communicationWebhookUrl as string | undefined) ||
+      (settings.contractSignatureReminderWebhookUrl as string | undefined);
+    const integrationWebhookSecret =
+      (settings.communicationWebhookSecret as string | undefined) ||
+      (settings.contractSignatureReminderWebhookSecret as string | undefined);
+
+    const templates: Array<{
+      name: string;
+      description: string;
+      trigger: string;
+      actions: Array<Record<string, unknown>>;
+    }> = [
+      {
+        name: 'Playbook provider failed (ops)',
+        description: 'Playbook multi-actions: notif admin + tache urgente + webhook SI.',
+        trigger: 'contract.signature.failed',
+        actions: [
+          {
+            type: 'create_notification',
+            title: 'Incident signature externe',
+            body: 'Echec provider detecte. Verifier la cause et appliquer l action recommandee.',
+            assigneeId: user.id,
+          },
+          {
+            type: 'create_task',
+            title: 'Traiter incident signature externe',
+            description: 'Verifier la cause provider, contacter le client si besoin, puis relancer.',
+            assigneeId: user.id,
+            priority: 'urgent',
+            dueInHours: 4,
+          },
+          ...(integrationWebhookUrl
+            ? [
+                {
+                  type: 'send_webhook',
+                  url: integrationWebhookUrl,
+                  secret: integrationWebhookSecret,
+                } as Record<string, unknown>,
+              ]
+            : []),
+        ],
+      },
+      {
+        name: 'Playbook provider declined (follow-up)',
+        description: 'Playbook multi-actions en cas de refus: notif + tache de suivi prioritaire.',
+        trigger: 'contract.signature.declined',
+        actions: [
+          {
+            type: 'create_notification',
+            title: 'Signature refusee par le client',
+            body: 'Un signataire a refuse le contrat. Revoir les conditions et re-emettre.',
+            assigneeId: user.id,
+          },
+          {
+            type: 'create_task',
+            title: 'Suivi refus signature contrat',
+            description: 'Contacter le client, ajuster le contrat, puis renvoyer la signature.',
+            assigneeId: user.id,
+            priority: 'high',
+            dueInHours: 24,
+          },
+        ],
+      },
+    ];
+
+    const created: string[] = [];
+    const existing: string[] = [];
+    for (const template of templates) {
+      const already = await this.prisma.automationRule.findFirst({
+        where: {
+          organizationId: user.organizationId,
+          trigger: template.trigger,
+          name: template.name,
+        },
+        select: { id: true },
+      });
+      if (already) {
+        existing.push(template.name);
+        continue;
+      }
+      await this.prisma.automationRule.create({
+        data: {
+          name: template.name,
+          description: template.description,
+          trigger: template.trigger,
+          conditions: [] as Prisma.InputJsonValue,
+          actions: template.actions as unknown as Prisma.InputJsonValue,
+          isEnabled: true,
+          organizationId: user.organizationId,
+        },
+      });
+      created.push(template.name);
+    }
+
+    return { created, existing, integrationWebhookConfigured: Boolean(integrationWebhookUrl) };
+  }
+
   /**
    * Point d'entrée principal : déclenche les règles d'automatisation correspondant au trigger.
    * Les règles synchrones (légères) sont exécutées immédiatement.
@@ -93,12 +198,22 @@ export class AutomationsService {
       const hasWebhook = actions.some((a) => a.type === 'send_webhook');
 
       if (hasWebhook) {
-        // Traitement asynchrone via BullMQ
-        await this.automationQueue.add('execute', {
-          ruleId: rule.id,
-          organizationId,
-          payload,
-        }, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
+        // Traitement asynchrone via BullMQ — ne pas faire échouer l'API métier si Redis est indispo
+        try {
+          await this.automationQueue.add(
+            'execute',
+            {
+              ruleId: rule.id,
+              organizationId,
+              payload,
+            },
+            { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
+          );
+        } catch (enqueueError) {
+          this.logger.warn(
+            `Impossible d'enfiler l'automatisation ${rule.id} (Redis/Bull?) — ${enqueueError instanceof Error ? enqueueError.message : 'erreur inconnue'}`,
+          );
+        }
       } else {
         // Traitement synchrone direct
         await this.executeRule(rule, payload, organizationId);
@@ -156,6 +271,16 @@ export class AutomationsService {
   ) {
     switch (action.type) {
       case 'create_task':
+        {
+        const requestedPriority = String(action.priority ?? 'medium') as Priority;
+        const priority: Priority = ['low', 'medium', 'high', 'urgent'].includes(requestedPriority)
+          ? requestedPriority
+          : 'medium';
+        const dueInHours =
+          typeof action.dueInHours === 'number' && Number.isFinite(action.dueInHours)
+            ? Number(action.dueInHours)
+            : undefined;
+        const dueAt = dueInHours ? new Date(Date.now() + dueInHours * 60 * 60 * 1000) : undefined;
         await this.prisma.task.create({
           data: {
             title: (action.title as string) || 'Tâche automatique',
@@ -163,9 +288,12 @@ export class AutomationsService {
             organizationId,
             projectId: action.projectId as string | undefined,
             assigneeId: action.assigneeId as string | undefined,
+            priority,
+            dueAt,
           },
         });
         break;
+        }
 
       case 'create_project': {
         const p = payload as { id?: string; contactId?: string };

@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ACCOUNT_INDUSTRIES, COUNTRY_OPTIONS, PHONE_DIAL_CODES } from '@crm/shared';
 import { api } from '@/lib/api';
+import { formatPhoneForStorage, splitStoredPhone } from '@/lib/phone';
 import { toast } from 'sonner';
 
 interface AccountData {
@@ -27,10 +29,12 @@ export function AccountEditForm({ accountId }: { accountId: string }) {
   const queryClient = useQueryClient();
 
   const [name, setName] = useState('');
-  const [industry, setIndustry] = useState('');
+  const [industrySelection, setIndustrySelection] = useState('');
+  const [industryOther, setIndustryOther] = useState('');
   const [website, setWebsite] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phoneDialCode, setPhoneDialCode] = useState('+33');
+  const [phoneLocal, setPhoneLocal] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('');
@@ -45,11 +49,20 @@ export function AccountEditForm({ accountId }: { accountId: string }) {
 
   useEffect(() => {
     if (!account) return;
+    const selectableIndustries = ACCOUNT_INDUSTRIES.map((x) => x.id).filter((id) => id !== 'autre');
+    const currentIndustry = account.industry ?? '';
+    const isKnownIndustry = selectableIndustries.includes(currentIndustry);
+
     setName(account.name ?? '');
-    setIndustry(account.industry ?? '');
+    setIndustrySelection(
+      currentIndustry ? (isKnownIndustry ? currentIndustry : 'autre') : '',
+    );
+    setIndustryOther(currentIndustry && !isKnownIndustry ? currentIndustry : '');
     setWebsite(account.website ?? '');
     setEmail(account.email ?? '');
-    setPhone(account.phone ?? '');
+    const parsedPhone = splitStoredPhone(account.phone, '+33');
+    setPhoneDialCode(parsedPhone.dialCode);
+    setPhoneLocal(parsedPhone.localNumber);
     setAddress(account.address ?? '');
     setCity(account.city ?? '');
     setCountry(account.country ?? '');
@@ -68,18 +81,23 @@ export function AccountEditForm({ accountId }: { accountId: string }) {
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean);
+      const industry =
+        industrySelection === 'autre'
+          ? industryOther.trim()
+          : industrySelection.trim();
+      const phone = formatPhoneForStorage(phoneDialCode, phoneLocal);
       const employeeCount =
         employeeCountRaw.trim().length > 0 ? Number.parseInt(employeeCountRaw.trim(), 10) : null;
 
       return api.put(`/accounts/${accountId}`, {
         name: name.trim(),
-        ...(industry.trim() ? { industry: industry.trim() } : { industry: null }),
+        ...(industry ? { industry } : { industry: null }),
         ...(website.trim() ? { website: website.trim() } : { website: null }),
-        ...(email.trim() ? { email: email.trim() } : { email: null }),
-        ...(phone.trim() ? { phone: phone.trim() } : { phone: null }),
+        email: email.trim(),
+        phone,
         ...(address.trim() ? { address: address.trim() } : { address: null }),
         ...(city.trim() ? { city: city.trim() } : { city: null }),
-        ...(country.trim() ? { country: country.trim() } : { country: null }),
+        country: country.trim(),
         ...(description.trim() ? { description: description.trim() } : { description: null }),
         ...(Number.isNaN(employeeCount as number) ? { employeeCount: null } : { employeeCount }),
         tags,
@@ -109,7 +127,14 @@ export function AccountEditForm({ accountId }: { accountId: string }) {
     );
   }
 
-  const disabled = !name.trim() || update.isPending;
+  const disabled =
+    !name.trim() ||
+    !email.trim() ||
+    !phoneLocal.trim() ||
+    !country.trim() ||
+    !industrySelection.trim() ||
+    (industrySelection === 'autre' && !industryOther.trim()) ||
+    update.isPending;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -130,12 +155,27 @@ export function AccountEditForm({ accountId }: { accountId: string }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium block mb-1">Secteur</label>
-            <input
+            <label className="text-sm font-medium block mb-1">Secteur *</label>
+            <select
               className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
-            />
+              value={industrySelection}
+              onChange={(e) => setIndustrySelection(e.target.value)}
+            >
+              <option value="">— Sélectionner un secteur —</option>
+              {ACCOUNT_INDUSTRIES.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {industrySelection === 'autre' && (
+              <input
+                className="w-full mt-2 px-3 py-2 text-sm rounded-lg border bg-background"
+                placeholder="Préciser le secteur"
+                value={industryOther}
+                onChange={(e) => setIndustryOther(e.target.value)}
+              />
+            )}
           </div>
           <div>
             <label className="text-sm font-medium block mb-1">Site web</label>
@@ -149,21 +189,37 @@ export function AccountEditForm({ accountId }: { accountId: string }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium block mb-1">E-mail</label>
+            <label className="text-sm font-medium block mb-1">E-mail *</label>
             <input
               type="email"
               className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
           </div>
           <div>
-            <label className="text-sm font-medium block mb-1">Téléphone</label>
-            <input
-              className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <label className="text-sm font-medium block mb-1">Téléphone *</label>
+            <div className="grid grid-cols-[150px_1fr] gap-2">
+              <select
+                className="w-full px-2 py-2 text-sm rounded-lg border bg-background"
+                value={phoneDialCode}
+                onChange={(e) => setPhoneDialCode(e.target.value)}
+              >
+                {PHONE_DIAL_CODES.map((opt) => (
+                  <option key={`${opt.code}-${opt.dialCode}`} value={opt.dialCode}>
+                    {opt.dialCode} · {opt.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
+                value={phoneLocal}
+                onChange={(e) => setPhoneLocal(e.target.value)}
+                placeholder="Numéro (sans indicatif)"
+                required
+              />
+            </div>
           </div>
         </div>
 
@@ -177,12 +233,20 @@ export function AccountEditForm({ accountId }: { accountId: string }) {
             />
           </div>
           <div>
-            <label className="text-sm font-medium block mb-1">Pays</label>
-            <input
+            <label className="text-sm font-medium block mb-1">Pays *</label>
+            <select
               className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
-            />
+              required
+            >
+              <option value="">— Sélectionner un pays —</option>
+              {COUNTRY_OPTIONS.map((opt) => (
+                <option key={opt.code} value={opt.label}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

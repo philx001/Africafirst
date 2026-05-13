@@ -26,7 +26,10 @@ const priorityConfig = {
 export function RecentTasks() {
   const { data, isLoading } = useQuery({
     queryKey: ['tasks', 'recent'],
-    queryFn: () => api.get('/tasks?limit=5&status=todo').then((r: unknown) => (r as { data: Task[] }).data),
+    queryFn: () =>
+      api
+        .get('/tasks?limit=5&status=todo')
+        .then((r: unknown) => (r as { data: Task[] }).data),
   });
 
   return (

@@ -17,14 +17,14 @@ interface Document {
 export default function ClientDocumentsPage() {
   const { data: documents = [], isLoading } = useQuery<Document[]>({
     queryKey: ['client', 'documents'],
-    queryFn: () => api.get('/client/documents').then((r: unknown) => (r as { data: Document[] }).data),
+    queryFn: () => api.get('/client/documents') as Promise<Document[]>,
   });
 
   const handleDownload = async (docId: string, filename: string) => {
     try {
-      const result = (await api.get(`/client/documents/${docId}/signed-url`)) as { data: { url: string } };
+      const result = (await api.get(`/client/documents/${docId}/signed-url`)) as { url: string };
       const link = document.createElement('a');
-      link.href = result.data.url;
+      link.href = result.url;
       link.download = filename;
       document.body.appendChild(link);
       link.click();

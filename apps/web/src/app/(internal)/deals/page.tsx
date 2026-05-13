@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { DealsKanban } from '@/components/kanban/deals-kanban';
+import { DealQuickCreate } from '@/components/crm/deals/deal-quick-create';
 
 export const metadata: Metadata = { title: 'Pipeline Commercial' };
 
@@ -12,6 +13,7 @@ export default function DealsPage() {
           <p className="text-muted-foreground">Glissez-déposez vos deals entre les colonnes</p>
         </div>
       </div>
+      <DealQuickCreate />
       <div className="flex-1 min-h-0">
         <DealsKanban />
       </div>

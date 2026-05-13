@@ -47,6 +47,74 @@ Consultez dans le code la configuration réelle (`ConfigModule` Nest, `envFilePa
 - **Mot de passe** : pas de placeholders du type **`[PASSWORD]`** dans l’URI finale ; caractères spéciaux (`@`, `:`, `%`, `#`, espaces…) → **pourcent-encoding** conforme RFC 3986, ou mot de passe plus simple lors de la phase de mise en route, ou string générée par le dashboard après saisie du MDP.
 - Avertissement **IPv4 / IPv6** sur les connexions « direct » : si la connexion échoue en local sans IPv6, utiliser une variante « session pooler » recommandée par le fournisseur.
 
+### 3.b Prisma — chemins du dépôt et commandes (`generate`, `migrate`)
+
+| Élément | Emplacement dans *crm-africafirst* |
+|--------|-------------------------------------|
+| **Schéma Prisma** (modèles, `datasource`, `generator`) | `apps/api/prisma/schema.prisma` |
+| **Migrations SQL** (historique à versionner) | `apps/api/prisma/migrations/` |
+| **Client généré** (ne pas éditer à la main ; régénéré par la CLI) | `node_modules/@prisma/client` et fichiers sous `node_modules/.prisma/client` (souvent à la **racine** du monorepo avec npm workspaces) |
+
+**Variables d’environnement** : Prisma lit en général un `.env` à la racine du monorepo et/ou dans `apps/api` selon votre configuration ; l’URI base est **`DATABASE_URL`** (et **`DATABASE_DIRECT_URL`** pour `directUrl` dans le schéma, ex. migrations).
+
+**Générer le client** (après modification du schéma ou pull Git) :
+
+```bash
+# Depuis le dossier API (recommandé si votre .env est bien chargé ici)
+cd apps/api
+npm run db:generate
+# équivalent :
+npx prisma generate
+```
+
+Si vous êtes à la **racine** du monorepo (utile quand le même `node_modules` sert tout le workspace) :
+
+```bash
+npx prisma generate --schema apps/api/prisma/schema.prisma
+```
+
+**Appliquer les migrations** (base accessible, `DATABASE_URL` / direct selon besoin) :
+
+```bash
+cd apps/api
+npm run db:migrate
+# équivalent production / déploiement :
+npx prisma migrate deploy
+```
+
+**Création / évolution du schéma en local** (génère une migration nommée) :
+
+```bash
+cd apps/api
+npm run db:migrate:dev
+# équivalent :
+npx prisma migrate dev
+```
+
+**Studio** (exploration des tables) : `cd apps/api && npm run db:studio` ou `npx prisma studio` depuis `apps/api`.
+
+#### Verrou Windows (`EPERM`, `query_engine-windows.dll.node`)
+
+Le moteur Prisma est un fichier `.dll` / `.node` parfois **verrouillé** tant qu’un processus Node s’en sert (serveur Next, API Nest, Turbo, ancien `prisma studio`, etc.). Avant `prisma generate` :
+
+1. **Dans le terminal où tourne le dev** : `Ctrl+C` pour arrêter `npm run dev` / `turbo dev`.
+2. **Sinon**, sous **PowerShell**, arrêter uniquement ce qui **écoute** sur les ports habituels du projet (**3000** = web, **3001** = API) :
+
+```powershell
+$ports = 3000, 3001
+foreach ($port in $ports) {
+  Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
+    ForEach-Object {
+      Write-Host "Arrêt PID $($_.OwningProcess) (port $port)"
+      Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+}
+```
+
+*(Éviter `Stop-Process` sur tous les `node` en une fois : cela peut affecter d’autres outils, dont l’IDE.)*
+
+Puis relancer `npm run db:generate` ou `npx prisma generate` comme ci-dessus.
+
 ---
 
 ## 4. Identité Supabase-type : URL, clés, JWT
@@ -74,6 +142,30 @@ Une ligne dans **`.env`** ne doit avoir qu’**un seul** signe **`=`** servant d
 
 ---
 
+## 5.b Incident TLS local (Supabase) — temporaire vs définitif
+
+Contexte observé sur ce poste : certains appels Node vers Supabase échouent avec `UNABLE_TO_VERIFY_LEAF_SIGNATURE` (*fetch failed*), ce qui casse inscription/connexion même si les variables sont correctes.
+
+- **Contournement temporaire (dev uniquement, non sécurisé)**  
+  Lancer le monorepo avec :
+  `npm run dev:insecure-tls`  
+  (définit `CRM_DEV_INSECURE_TLS=1` et `NODE_TLS_REJECT_UNAUTHORIZED=0` pour Turbo ; le code **refuse** ces réglages si `NODE_ENV=production`).
+- **Solution définitive (production et postes « propres »)**  
+  Installer le certificat racine de l’environnement réseau (proxy/antivirus/entreprise), puis configurer Node avec :
+  `NODE_EXTRA_CA_CERTS=/chemin/vers/ca-root.pem`  
+  et revenir au script standard `npm run dev` sans désactiver la vérification TLS.
+
+**Production / CI (obligatoire)**
+
+- Ne **pas** définir `CRM_DEV_INSECURE_TLS`.
+- Ne **pas** définir `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+- Les images Docker du dépôt fixent déjà `NODE_ENV=production` ; l’API **refuse de démarrer** si ces variables dangereuses sont présentes.
+- La route Next `/api/auth/sign-in` répond **503** si une telle config est détectée en production.
+
+> **Important :** ne pas utiliser le mode `insecure-tls` en production, CI ou sur un poste exposé.
+
+---
+
 ## 6. Suite du projet *CRM Africa First* — recommandations
 
 Checklist après configuration des fichiers d’environnement :
@@ -81,7 +173,7 @@ Checklist après configuration des fichiers d’environnement :
 1. **Docker :** démarrer Redis (`docker compose up -d redis` à la racine).
 2. **Dépendances :** `npm install` à la racine du monorepo.
 3. **Supabase Storage :** créer les buckets configurés (**documents**, **avatars**) si absent.
-4. **Prisma (depuis `apps/api`) :** `npm run db:generate` puis première migration (**` npm run db:migrate:dev`** avec un nom explicite, ex. **`init`**), sauf stratégie d’équipe différente.
+4. **Prisma :** schéma dans `apps/api/prisma/schema.prisma` ; commandes détaillées (dont `generate` et `migrate`) → **§ 3.b**. En résumé : depuis `apps/api`, `npm run db:generate` puis `npm run db:migrate` (ou `db:migrate:dev` pour créer une migration en local). En cas d’erreur **EPERM** sous Windows lors du `generate`, arrêter les serveurs de dev (voir § 3.b).
 5. **Développement :** `npm run dev` à la racine ; vérifier API (**Swagger** sous `/api/docs` si disponible), application web sur le port prévu (**3000**).
 6. **Poursuite du projet :** le **`.gitignore`** actuel exclut le dossier `apps/api/prisma/migrations/` — **harmoniser** avec la stratégie d’équipe (en général on **versionne** les migrations Prisma dans Git pour reproduire la base ; sinon documenter une autre procédure).
 7. **CI/CD :** lorsque déployé, injecter **`DATABASE_*`**, clés Supabase et secrets hors dépôt via les mécanismes plateforme.

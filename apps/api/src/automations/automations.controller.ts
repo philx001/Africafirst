@@ -40,4 +40,10 @@ export class AutomationsController {
   remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.automationsService.remove(id, user.organizationId);
   }
+
+  @Post('templates/provider-defaults')
+  @ApiOperation({ summary: 'Installer les templates provider (failed/declined)' })
+  ensureProviderDefaults(@CurrentUser() user: AuthUser) {
+    return this.automationsService.ensureProviderDefaultRules(user);
+  }
 }

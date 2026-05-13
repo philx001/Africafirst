@@ -1,13 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
 const loginSchema = z.object({
@@ -18,7 +16,6 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export function LoginForm() {
-  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -29,20 +26,26 @@ export function LoginForm() {
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      const supabase = createClient();
-      const { data: authData, error } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
+      const res = await fetch('/api/auth/sign-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: data.email, password: data.password }),
+        credentials: 'include',
       });
-
-      if (error) throw error;
-
-      const role = authData.user?.app_metadata?.user_role;
-      const redirectTo = role === 'client' ? '/client/dashboard' : '/dashboard';
-
+      const json = (await res.json()) as {
+        ok?: boolean;
+        redirectTo?: string;
+        error?: string;
+        code?: string;
+        hint?: string;
+      };
+      if (!res.ok || !json.ok) {
+        const parts = [json.error, json.code ? `(${json.code})` : '', json.hint].filter(Boolean);
+        toast.error(parts.length ? parts.join(' ') : 'Identifiants invalides');
+        return;
+      }
       toast.success('Connexion réussie !');
-      router.push(redirectTo);
-      router.refresh();
+      window.location.assign(json.redirectTo ?? '/dashboard');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Identifiants invalides');
     } finally {

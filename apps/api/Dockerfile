@@ -18,6 +18,7 @@ RUN npm run build
 
 FROM base AS production
 ENV NODE_ENV=production
+# Ne pas définir CRM_DEV_INSECURE_TLS ni NODE_TLS_REJECT_UNAUTHORIZED=0 (refus au démarrage de l’API).
 COPY package*.json ./
 RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist

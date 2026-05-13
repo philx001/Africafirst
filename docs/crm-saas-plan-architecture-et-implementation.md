@@ -55,7 +55,7 @@ todos:
     status: in_progress
   - id: tunnel-contractuel-onboarding
     content: "Métier : Devis → Contrat → Signature ; type d’offre ; onboarding ; templates phases (skipped OK)"
-    status: pending
+    status: completed
   - id: supabase-rls-policies
     content: Politiques RLS Supabase par organization_id (alignées JWT / Prisma)
     status: pending
@@ -79,7 +79,7 @@ isProject: false
 |--------|----------|----------------------|
 | Fondations | Turborepo, Auth Supabase, Prisma multi-tenant, Redis, Workers | **RLS** PostgreSQL (Supabase) par `organization_id` |
 | API | Contacts, Accounts, Deals, Projects, Tasks, Interactions, **Documents** (Supabase Storage), **Search**, Notifications (CRUD), Automations, Webhooks, Client portal | Notifications **temps réel** ou UX synchronisée ; règles `won` → projet / onboarding |
-| **Tunnel Devis → Contrat → Signature** | Non modélisé en entité métier dédiée | Schéma + API + UI + portail (priorité cahier des charges) |
+| **Tunnel Devis → Contrat → Signature** | Modèle `Quote`, `Contract`, UI tunnel sur fiche deal (`/deals/[id]`), portail signature, `ensureTunnelOnboardingProject` après signature (projet + phases) | Variante « portail client accepte devis » ; webhooks / notifs temps réel ; aligner doc produit si besoin |
 | **Types d’offre** & **templates de phases** | Générique (tags, projets) | Champs ou référentiel ; génération tâches depuis bibliothèque ([noyau MVP §6](./reference-phases-types-programmes-crm.md)) ; sauts sans casser le flux |
 | UI interne | Dashboard, Contacts, Pipeline deals, Projets | Pages **Entreprises** (`/accounts`), **Tâches** (`/tasks`), **Automatisations**, **Paramètres** — aujourd’hui référencées par la **sidebar** mais **sans** `page.tsx` correspondant ; vues **Documents** / **Interactions** internes ; barre de **recherche** branchée sur `/search` |
 | UI portail client | Projets, documents, messages, dashboard | Étendre pour signatures / documents contractuels |

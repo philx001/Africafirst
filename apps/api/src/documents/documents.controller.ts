@@ -12,12 +12,13 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
-import { CurrentUser } from '../common/decorators/auth.decorator';
+import { CurrentUser, Roles } from '../common/decorators/auth.decorator';
 import { AuthUser } from '@crm/shared';
 
 @ApiTags('documents')
 @ApiBearerAuth('supabase-jwt')
 @Controller('documents')
+@Roles('admin', 'member')
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 

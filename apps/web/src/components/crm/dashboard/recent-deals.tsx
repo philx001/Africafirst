@@ -18,7 +18,10 @@ interface Deal {
 export function RecentDeals() {
   const { data, isLoading } = useQuery({
     queryKey: ['deals', 'recent'],
-    queryFn: () => api.get('/deals?limit=5').then((r: unknown) => (r as { data: { data: Deal[] } }).data.data),
+    queryFn: () =>
+      api
+        .get('/deals?limit=5')
+        .then((r: unknown) => (r as { data: Deal[] }).data),
   });
 
   const getStageStyle = (stage: string) => {

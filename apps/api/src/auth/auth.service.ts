@@ -122,13 +122,19 @@ export class AuthService {
     inviterName: string,
   ) {
     const adminClient = this.supabase.getAdminClient();
+    const webUrl =
+      this.config.get<string>('NEXT_PUBLIC_WEB_URL') ||
+      this.config.get<string>('FRONTEND_URL') ||
+      this.config.get<string>('NEXT_PUBLIC_APP_URL') ||
+      'http://localhost:3000';
 
     const { data: authData, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: {
         organization_id: organizationId,
         user_role: role,
       },
-      redirectTo: `${this.config.get('NEXT_PUBLIC_API_URL')}/auth/accept-invite`,
+      // Le lien d'invitation doit revenir vers le frontend (et non l'API).
+      redirectTo: `${webUrl}/login`,
     });
 
     if (error) {

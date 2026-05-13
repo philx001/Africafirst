@@ -28,7 +28,7 @@ const statCards = [
 export function DashboardStats() {
   const { data: stats, isLoading } = useQuery<Stats>({
     queryKey: ['stats'],
-    queryFn: () => api.get('/organizations/stats').then((r: unknown) => (r as { data: Stats }).data),
+    queryFn: () => api.get('/organizations/stats') as Promise<Stats>,
   });
 
   if (isLoading) {

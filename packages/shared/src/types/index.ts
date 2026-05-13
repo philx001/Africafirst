@@ -39,6 +39,8 @@ export type ProjectPhaseStatus =
 
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 
+export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
 export type InteractionType = 'email' | 'call' | 'meeting' | 'note';
 
 export type NotificationType =
@@ -51,7 +53,9 @@ export type NotificationType =
   | 'automation_triggered'
   | 'mention'
   | 'contract_pending_signature'
-  | 'contract_signed';
+  | 'contract_signed'
+  | 'ticket_created'
+  | 'ticket_assigned';
 
 export type AutomationTrigger =
   | 'contact.created'
@@ -66,7 +70,12 @@ export type AutomationTrigger =
   | 'task.created'
   | 'task.updated'
   | 'task.completed'
-  | 'contract.signed';
+  | 'contract.signed'
+  | 'contract.signature.provider_status_changed'
+  | 'contract.signature.requested'
+  | 'contract.signature.viewed'
+  | 'contract.signature.declined'
+  | 'contract.signature.failed';
 
 export type AutomationActionType =
   | 'create_task'

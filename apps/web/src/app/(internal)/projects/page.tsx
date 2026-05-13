@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { ProjectsList } from '@/components/crm/projects/projects-list';
+import { ProjectQuickCreate } from '@/components/crm/projects/project-quick-create';
 
 export const metadata: Metadata = { title: 'Projets' };
 
@@ -10,6 +11,7 @@ export default function ProjectsPage() {
         <h1 className="text-2xl font-bold tracking-tight">Projets</h1>
         <p className="text-muted-foreground">Suivez l'avancement de tous vos projets clients</p>
       </div>
+      <ProjectQuickCreate />
       <ProjectsList />
     </div>
   );

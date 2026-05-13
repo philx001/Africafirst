@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "turbo dev",
+    "dev:insecure-tls": "set CRM_DEV_INSECURE_TLS=1&& set NODE_TLS_REJECT_UNAUTHORIZED=0&& turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
     "format": "turbo format",

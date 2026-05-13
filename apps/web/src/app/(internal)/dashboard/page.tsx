@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { DashboardStats } from '@/components/crm/dashboard/dashboard-stats';
 import { RecentDeals } from '@/components/crm/dashboard/recent-deals';
 import { RecentTasks } from '@/components/crm/dashboard/recent-tasks';
@@ -13,6 +14,25 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Vue d'ensemble de votre activité</p>
       </div>
       <DashboardStats />
+      <div className="rounded-xl border bg-card p-4">
+        <h2 className="font-semibold mb-3">Actions rapides</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {[
+            { href: '/contacts/new', label: 'Nouveau contact' },
+            { href: '/accounts/new', label: 'Nouvelle entreprise' },
+            { href: '/deals', label: 'Nouveau deal' },
+            { href: '/tasks', label: 'Nouvelle tâche' },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="px-3 py-2 rounded-lg border text-sm hover:bg-muted transition-colors text-center"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <RecentDeals />
         <RecentTasks />

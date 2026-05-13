@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Search, Bell, Moon, Sun } from 'lucide-react';
@@ -8,6 +8,18 @@ import { api } from '@/lib/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatRelative } from '@/lib/utils';
 import type { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
+
+type NotificationRow = {
+  id: string;
+  title: string;
+  body?: string | null;
+  createdAt: string;
+  readAt?: string | null;
+};
+
+type CurrentUser = { id: string; email: string; role: string };
 
 export function TopBar({ user: _user }: { user: User }) {
   const router = useRouter();
@@ -15,6 +27,12 @@ export function TopBar({ user: _user }: { user: User }) {
   const { theme, setTheme } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
+
+  const { data: currentUser } = useQuery({
+    queryKey: ['users', 'me'],
+    queryFn: () => api.get('/users/me') as Promise<CurrentUser>,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -24,15 +42,39 @@ export function TopBar({ user: _user }: { user: User }) {
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
-    queryFn: () => api.get('/notifications?unreadOnly=true') as Promise<Array<{
-      id: string;
-      title: string;
-      body?: string | null;
-      createdAt: string;
-      readAt?: string | null;
-    }>>,
+    queryFn: () => api.get('/notifications?unreadOnly=true') as Promise<NotificationRow[]>,
     enabled: showNotifications,
   });
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`notifications:${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `userId=eq.${currentUser.id}`,
+        },
+        (payload) => {
+          const notification = payload.new as NotificationRow;
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+          toast.info(notification.title, {
+            description: notification.body ?? undefined,
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, queryClient]);
 
   const handleSearchSubmit = () => {
     const q = searchQuery.trim();

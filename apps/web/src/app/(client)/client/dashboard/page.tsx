@@ -22,7 +22,7 @@ interface DashboardData {
 export default function ClientDashboardPage() {
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['client', 'dashboard'],
-    queryFn: () => api.get('/client/dashboard').then((r: unknown) => (r as { data: DashboardData }).data),
+    queryFn: () => api.get('/client/dashboard') as Promise<DashboardData>,
   });
 
   if (isLoading) {

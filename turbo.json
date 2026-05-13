@@ -2,6 +2,8 @@
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
     "NODE_ENV",
+    "CRM_DEV_INSECURE_TLS",
+    "NODE_TLS_REJECT_UNAUTHORIZED",
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",

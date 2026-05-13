@@ -5,14 +5,14 @@ import {
   AuthUser,
   ProjectStatus,
   OFFER_TYPE_VALUES,
-  DEFAULT_PROJECT_PHASE_TEMPLATES,
   PROJECT_PHASE_STATUS_VALUES,
   type OfferType,
   type ProjectPhaseStatus,
 } from '@crm/shared';
-import { IsOptional, IsString, IsArray, IsEnum, IsInt, Min, Max, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsArray, IsEnum, IsInt, Min, Max, IsIn, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { ApplyProjectTemplateDto, ProjectTemplatesService } from '../project-templates/project-templates.service';
 
 export class CreateProjectDto {
   @ApiProperty() @IsString() name: string;
@@ -31,6 +31,8 @@ export class CreateProjectDto {
   @IsOptional()
   @IsIn([...OFFER_TYPE_VALUES])
   offerType?: OfferType;
+  @ApiPropertyOptional() @IsOptional() @IsString() templateId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() generatePhases?: boolean;
 }
 
 export class UpdateProjectPhaseDto {
@@ -41,7 +43,10 @@ export class UpdateProjectPhaseDto {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly projectTemplates: ProjectTemplatesService,
+  ) {}
 
   async create(dto: CreateProjectDto, user: AuthUser) {
     let offerType = dto.offerType;
@@ -53,23 +58,30 @@ export class ProjectsService {
       if (deal) offerType = deal.offerType;
     }
 
-    return this.prisma.project.create({
+    const { templateId, generatePhases, ...projectDto } = dto;
+    const project = await this.prisma.project.create({
       data: {
-        ...dto,
+        ...projectDto,
         organizationId: user.organizationId,
         ...(offerType !== undefined ? { offerType } : {}),
       },
       include: { deal: true, contact: true },
     });
+    if (generatePhases) {
+      await this.projectTemplates.instantiateForProject(project.id, user, { templateId });
+      return this.findOne(project.id, user);
+    }
+    return project;
   }
 
-  async findAll(pagination: PaginationDto, user: AuthUser, status?: ProjectStatus) {
+  async findAll(pagination: PaginationDto, user: AuthUser, status?: ProjectStatus, dealId?: string) {
     const { page = 1, limit = 20, search } = pagination;
     const skip = (page - 1) * limit;
 
     const where = {
       organizationId: user.organizationId,
       ...(status && { status }),
+      ...(dealId && { dealId }),
       ...(search && { name: { contains: search, mode: 'insensitive' as const } }),
     };
 
@@ -114,30 +126,11 @@ export class ProjectsService {
   }
 
   async bootstrapPhases(id: string, user: AuthUser) {
-    const project = await this.prisma.project.findFirst({
-      where: { id, organizationId: user.organizationId },
-      select: { id: true },
-    });
-    if (!project) throw new NotFoundException('Projet introuvable');
-    const existing = await this.prisma.projectPhase.count({ where: { projectId: id } });
-    if (existing > 0) {
-      return this.prisma.projectPhase.findMany({
-        where: { projectId: id },
-        orderBy: { sortOrder: 'asc' },
-      });
-    }
-    await this.prisma.projectPhase.createMany({
-      data: DEFAULT_PROJECT_PHASE_TEMPLATES.map((t) => ({
-        projectId: id,
-        key: t.key,
-        label: t.label,
-        sortOrder: t.sortOrder,
-      })),
-    });
-    return this.prisma.projectPhase.findMany({
-      where: { projectId: id },
-      orderBy: { sortOrder: 'asc' },
-    });
+    return this.projectTemplates.instantiateForProject(id, user);
+  }
+
+  async applyTemplate(id: string, dto: ApplyProjectTemplateDto, user: AuthUser) {
+    return this.projectTemplates.instantiateForProject(id, user, dto);
   }
 
   async updatePhase(projectId: string, phaseId: string, dto: UpdateProjectPhaseDto, user: AuthUser) {
@@ -155,16 +148,18 @@ export class ProjectsService {
       data: {
         status: dto.status,
         completedAt: dto.status === 'completed' ? new Date() : null,
+        resolvedAt: ['completed', 'skipped', 'not_applicable'].includes(dto.status) ? new Date() : null,
       },
     });
   }
 
   async update(id: string, dto: Partial<CreateProjectDto>, user: AuthUser) {
     await this.findOne(id, user);
+    const { templateId: _templateId, generatePhases: _generatePhases, ...projectDto } = dto;
     return this.prisma.project.update({
       where: { id },
       data: {
-        ...dto,
+        ...projectDto,
         ...(dto.status === 'completed' ? { completedAt: new Date() } : {}),
       },
       include: { deal: true, contact: true },

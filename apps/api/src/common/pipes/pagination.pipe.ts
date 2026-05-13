@@ -1,4 +1,4 @@
-import { IsOptional, IsInt, Min, Max } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PAGINATION_DEFAULTS } from '@crm/shared';
@@ -22,4 +22,46 @@ export class PaginationDto {
   @ApiPropertyOptional()
   @IsOptional()
   search?: string;
+
+  // Champs de filtre fréquents transmis dans la querystring
+  // (évite les 400 "property should not exist" avec forbidNonWhitelisted=true).
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  status?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  projectId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  assigneeId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  contactId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  accountId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  dealId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  folderId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  type?: string;
 }

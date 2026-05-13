@@ -3,6 +3,8 @@ import { PrismaService } from '../config/prisma.service';
 import { SupabaseService } from '../config/supabase.service';
 import { AuthUser } from '@crm/shared';
 import { v4 as uuidv4 } from 'uuid';
+import { NotificationsService } from '../notifications/notifications.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 export interface UploadDocumentOptions {
   file: Express.Multer.File;
@@ -21,17 +23,80 @@ export class DocumentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly supabase: SupabaseService,
+    private readonly notifications: NotificationsService,
+    private readonly webhooks: WebhooksService,
   ) {}
+
+  private async notifyDocumentShared(
+    document: { id: string; filename: string; contactId: string | null; projectId: string | null; accountId: string | null },
+    user: AuthUser,
+  ) {
+    if (user.role === 'client') {
+      const admins = await this.prisma.user.findMany({
+        where: { organizationId: user.organizationId, role: 'admin', isActive: true },
+        select: { id: true },
+      });
+      for (const admin of admins) {
+        await this.notifications.create({
+          userId: admin.id,
+          organizationId: user.organizationId,
+          type: 'document_uploaded',
+          title: 'Nouveau document client',
+          body: `Le client a envoyé « ${document.filename} ».`,
+          payload: { documentId: document.id, from: 'client', contactId: document.contactId },
+        });
+      }
+    } else if (document.contactId) {
+      const clientUser = await this.prisma.user.findFirst({
+        where: { organizationId: user.organizationId, role: 'client', contactId: document.contactId, isActive: true },
+      });
+      if (clientUser) {
+        await this.notifications.create({
+          userId: clientUser.id,
+          organizationId: user.organizationId,
+          type: 'document_uploaded',
+          title: 'Nouveau document reçu',
+          body: `Un document vous a été transmis: « ${document.filename} ».`,
+          payload: { documentId: document.id, from: 'team', contactId: document.contactId },
+        });
+      }
+    }
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { settings: true },
+    });
+    const settings = (org?.settings as Record<string, unknown>) || {};
+    const webhookUrl = settings.communicationWebhookUrl as string | undefined;
+    const webhookSecret = settings.communicationWebhookSecret as string | undefined;
+    if (webhookUrl) {
+      await this.webhooks.dispatch({
+        url: webhookUrl,
+        secret: webhookSecret,
+        payload: {
+          event: 'document.shared',
+          organizationId: user.organizationId,
+          documentId: document.id,
+          filename: document.filename,
+          fromRole: user.role,
+          contactId: document.contactId,
+          projectId: document.projectId,
+          accountId: document.accountId,
+        },
+      });
+    }
+  }
 
   async upload(options: UploadDocumentOptions, user: AuthUser) {
     const { file, contactId, dealId, projectId, accountId, description } = options;
+    const effectiveContactId = user.role === 'client' ? user.contactId ?? null : (contactId ?? null);
 
     // Chemin unique dans Supabase Storage : org/uuid-filename
     const storagePath = `${user.organizationId}/${uuidv4()}-${file.originalname}`;
 
     await this.supabase.uploadFile(this.BUCKET, storagePath, file.buffer, file.mimetype);
 
-    return this.prisma.document.create({
+    const created = await this.prisma.document.create({
       data: {
         filename: file.originalname,
         mimeType: file.mimetype,
@@ -40,12 +105,15 @@ export class DocumentsService {
         bucket: this.BUCKET,
         description,
         organizationId: user.organizationId,
-        contactId,
+        contactId: effectiveContactId,
         dealId,
         projectId,
         accountId,
       },
     });
+
+    await this.notifyDocumentShared(created, user);
+    return created;
   }
 
   async findAll(

@@ -21,7 +21,7 @@ export default function ClientMessagesPage() {
 
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ['client', 'messages'],
-    queryFn: () => api.get('/client/messages').then((r: unknown) => (r as { data: Message[] }).data),
+    queryFn: () => api.get('/client/messages') as Promise<Message[]>,
     refetchInterval: 15000,
   });
 

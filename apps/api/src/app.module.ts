@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bull';
+import { ScheduleModule } from '@nestjs/schedule';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './config/winston.config';
 import { PrismaModule } from './config/prisma.module';
@@ -23,9 +24,13 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { SearchModule } from './search/search.module';
 import { QuotesModule } from './quotes/quotes.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { ProjectTemplatesModule } from './project-templates/project-templates.module';
 import { RATE_LIMIT } from '@crm/shared';
+import { AppController } from './app.controller';
 
 @Module({
+  controllers: [AppController],
   imports: [
     // Configuration globale
     ConfigModule.forRoot({
@@ -57,6 +62,7 @@ import { RATE_LIMIT } from '@crm/shared';
         redis: config.get<string>('REDIS_URL') || 'redis://localhost:6379',
       }),
     }),
+    ScheduleModule.forRoot(),
 
     // Modules infrastructure
     PrismaModule,
@@ -75,8 +81,10 @@ import { RATE_LIMIT } from '@crm/shared';
     DocumentsModule,
     NotificationsModule,
     AutomationsModule,
+    ProjectTemplatesModule,
     QuotesModule,
     ContractsModule,
+    TicketsModule,
     ClientPortalModule,
     WebhooksModule,
     SearchModule,

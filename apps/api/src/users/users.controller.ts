@@ -17,6 +17,12 @@ export class UsersController {
     return this.usersService.findAll(user.organizationId);
   }
 
+  @Get('me')
+  @ApiOperation({ summary: 'Utilisateur courant' })
+  findMe(@CurrentUser() user: AuthUser) {
+    return this.usersService.findMe(user);
+  }
+
   @Get(':id')
   @Roles('admin')
   @ApiOperation({ summary: 'Détail d\'un utilisateur' })

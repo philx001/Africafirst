@@ -4,6 +4,8 @@ import { PrismaService } from '../config/prisma.service';
 import { SupabaseService } from '../config/supabase.service';
 import { AuthUser } from '@crm/shared';
 import { ContractsService } from '../contracts/contracts.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 
 @Injectable()
 export class ClientPortalService {
@@ -11,6 +13,8 @@ export class ClientPortalService {
     private readonly prisma: PrismaService,
     private readonly supabase: SupabaseService,
     private readonly contracts: ContractsService,
+    private readonly notifications: NotificationsService,
+    private readonly webhooks: WebhooksService,
   ) {}
   /**
    * Vérifie que l'utilisateur est bien un client et retourne son contact_id
@@ -75,6 +79,30 @@ export class ClientPortalService {
         _count: { select: { documents: true } },
       },
     });
+  }
+
+  /**
+   * Détail d'un projet client
+   */
+  async getProject(projectId: string, user: AuthUser) {
+    const contactId = this.assertClient(user);
+
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, contactId, organizationId: user.organizationId },
+      include: {
+        tasks: {
+          orderBy: [{ status: 'asc' }, { dueAt: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, title: true, status: true, dueAt: true, priority: true, completedAt: true },
+        },
+        _count: { select: { documents: true } },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Projet introuvable');
+    }
+
+    return project;
   }
 
   /**
@@ -146,7 +174,7 @@ export class ClientPortalService {
 
     if (!admin) throw new NotFoundException('Aucun administrateur disponible');
 
-    return this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: {
         content,
         senderId: user.id,
@@ -156,6 +184,40 @@ export class ClientPortalService {
         contactId: user.contactId,
       },
     });
+
+    await this.notifications.create({
+      userId: admin.id,
+      organizationId: user.organizationId,
+      type: 'message_received',
+      title: 'Nouveau message client',
+      body: content.length > 120 ? `${content.slice(0, 117)}...` : content,
+      payload: { messageId: message.id, projectId: message.projectId, fromRole: 'client' },
+    });
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { settings: true },
+    });
+    const settings = (org?.settings as Record<string, unknown>) || {};
+    const webhookUrl = settings.communicationWebhookUrl as string | undefined;
+    const webhookSecret = settings.communicationWebhookSecret as string | undefined;
+    if (webhookUrl) {
+      await this.webhooks.dispatch({
+        url: webhookUrl,
+        secret: webhookSecret,
+        payload: {
+          event: 'message.received',
+          organizationId: user.organizationId,
+          messageId: message.id,
+          fromUserId: user.id,
+          toUserId: admin.id,
+          projectId: message.projectId,
+          fromRole: 'client',
+        },
+      });
+    }
+
+    return message;
   }
 
   /**

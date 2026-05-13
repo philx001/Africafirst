@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ACCOUNT_INDUSTRIES, CONTACT_JOB_TITLES, COUNTRY_OPTIONS, PHONE_DIAL_CODES } from '@crm/shared';
 import { api } from '@/lib/api';
+import { formatPhoneForStorage } from '@/lib/phone';
 import { toast } from 'sonner';
 
 interface AccountOpt {
@@ -18,10 +20,13 @@ export function ContactCreateForm() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phoneDialCode, setPhoneDialCode] = useState('+33');
+  const [phoneLocal, setPhoneLocal] = useState('');
   const [mobile, setMobile] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
-  const [department, setDepartment] = useState('');
+  const [jobTitleSelection, setJobTitleSelection] = useState('');
+  const [jobTitleOther, setJobTitleOther] = useState('');
+  const [industrySelection, setIndustrySelection] = useState('');
+  const [industryOther, setIndustryOther] = useState('');
   const [linkedinUrl, setLinkedinUrl] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
@@ -43,18 +48,27 @@ export function ContactCreateForm() {
         .split(',')
         .map((t) => t.trim())
         .filter(Boolean);
+      const phone = formatPhoneForStorage(phoneDialCode, phoneLocal);
+      const jobTitle =
+        jobTitleSelection === 'other'
+          ? jobTitleOther.trim()
+          : jobTitleSelection.trim();
+      const department =
+        industrySelection === 'autre'
+          ? industryOther.trim()
+          : industrySelection.trim();
       return api.post('/contacts', {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        ...(email.trim() ? { email: email.trim() } : {}),
-        ...(phone.trim() ? { phone: phone.trim() } : {}),
+        email: email.trim(),
+        phone,
         ...(mobile.trim() ? { mobile: mobile.trim() } : {}),
-        ...(jobTitle.trim() ? { jobTitle: jobTitle.trim() } : {}),
-        ...(department.trim() ? { department: department.trim() } : {}),
+        jobTitle,
+        department,
         ...(linkedinUrl.trim() ? { linkedinUrl: linkedinUrl.trim() } : {}),
         ...(address.trim() ? { address: address.trim() } : {}),
         ...(city.trim() ? { city: city.trim() } : {}),
-        ...(country.trim() ? { country: country.trim() } : {}),
+        country: country.trim(),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         ...(tags.length ? { tags } : {}),
         ...(accountId ? { accountId } : {}),
@@ -68,7 +82,17 @@ export function ContactCreateForm() {
     onError: () => toast.error('Création impossible — vérifiez les champs (e-mail valide si renseigné).'),
   });
 
-  const disabled = !firstName.trim() || !lastName.trim() || create.isPending;
+  const disabled =
+    !firstName.trim() ||
+    !lastName.trim() ||
+    !email.trim() ||
+    !phoneLocal.trim() ||
+    !jobTitleSelection.trim() ||
+    (jobTitleSelection === 'other' && !jobTitleOther.trim()) ||
+    !industrySelection.trim() ||
+    (industrySelection === 'autre' && !industryOther.trim()) ||
+    !country.trim() ||
+    create.isPending;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -100,21 +124,37 @@ export function ContactCreateForm() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium block mb-1">E-mail</label>
+            <label className="text-sm font-medium block mb-1">E-mail *</label>
             <input
               type="email"
               className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              required
             />
           </div>
           <div>
-            <label className="text-sm font-medium block mb-1">Téléphone</label>
-            <input
-              className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <label className="text-sm font-medium block mb-1">Téléphone *</label>
+            <div className="grid grid-cols-[150px_1fr] gap-2">
+              <select
+                className="w-full px-2 py-2 text-sm rounded-lg border bg-background"
+                value={phoneDialCode}
+                onChange={(e) => setPhoneDialCode(e.target.value)}
+              >
+                {PHONE_DIAL_CODES.map((opt) => (
+                  <option key={`${opt.code}-${opt.dialCode}`} value={opt.dialCode}>
+                    {opt.dialCode} · {opt.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
+                value={phoneLocal}
+                onChange={(e) => setPhoneLocal(e.target.value)}
+                placeholder="Numéro (sans indicatif)"
+                required
+              />
+            </div>
           </div>
         </div>
 
@@ -146,20 +186,54 @@ export function ContactCreateForm() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm font-medium block mb-1">Fonction</label>
-            <input
+            <label className="text-sm font-medium block mb-1">Fonction *</label>
+            <select
               className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
-              value={jobTitle}
-              onChange={(e) => setJobTitle(e.target.value)}
-            />
+              value={jobTitleSelection}
+              onChange={(e) => setJobTitleSelection(e.target.value)}
+              required
+            >
+              <option value="">— Sélectionner une fonction —</option>
+              {CONTACT_JOB_TITLES.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {jobTitleSelection === 'other' && (
+              <input
+                className="w-full mt-2 px-3 py-2 text-sm rounded-lg border bg-background"
+                value={jobTitleOther}
+                onChange={(e) => setJobTitleOther(e.target.value)}
+                placeholder="Préciser la fonction"
+                required
+              />
+            )}
           </div>
           <div>
-            <label className="text-sm font-medium block mb-1">Service</label>
-            <input
+            <label className="text-sm font-medium block mb-1">Secteur d'activité *</label>
+            <select
               className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-            />
+              value={industrySelection}
+              onChange={(e) => setIndustrySelection(e.target.value)}
+              required
+            >
+              <option value="">— Sélectionner un secteur —</option>
+              {ACCOUNT_INDUSTRIES.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {industrySelection === 'autre' && (
+              <input
+                className="w-full mt-2 px-3 py-2 text-sm rounded-lg border bg-background"
+                value={industryOther}
+                onChange={(e) => setIndustryOther(e.target.value)}
+                placeholder="Préciser le secteur"
+                required
+              />
+            )}
           </div>
         </div>
 
@@ -191,12 +265,20 @@ export function ContactCreateForm() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium block mb-1">Pays</label>
-              <input
+              <label className="text-sm font-medium block mb-1">Pays *</label>
+              <select
                 className="w-full px-3 py-2 text-sm rounded-lg border bg-background"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-              />
+                required
+              >
+                <option value="">— Sélectionner un pays —</option>
+                {COUNTRY_OPTIONS.map((opt) => (
+                  <option key={opt.code} value={opt.label}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

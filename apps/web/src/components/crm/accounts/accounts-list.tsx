@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
-import { Search, Building2, Users, Handshake } from 'lucide-react';
+import { Search, Building2, Users, Handshake, Plus } from 'lucide-react';
 
 interface AccountRow {
   id: string;
@@ -55,6 +55,13 @@ export function AccountsList() {
             className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
+        <Link
+          href="/accounts/new"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Nouvelle entreprise
+        </Link>
       </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">

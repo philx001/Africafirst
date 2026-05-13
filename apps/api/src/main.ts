@@ -18,17 +18,55 @@ async function bootstrap() {
   const port = configService.get<number>('API_PORT') || 3001;
   const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
 
-  // Sécurité HTTP
-  app.use(helmet());
-  app.use(compression());
+  // CORS en premier pour que les preflight OPTIONS reçoivent les bons en-têtes
+  const envOrigins =
+    configService
+      .get<string>('CORS_ORIGINS')
+      ?.split(',')
+      .map((x) => x.trim())
+      .filter(Boolean) ?? [];
+  const allowedOrigins = new Set([
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://[::1]:3000',
+    ...(configService.get<string>('WEB_APP_URL') ? [configService.get<string>('WEB_APP_URL')!] : []),
+    ...envOrigins,
+  ]);
 
-  // CORS
+  const isDevLocalOrigin = (origin: string) =>
+    /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
+
   app.enableCors({
-    origin: configService.get<string>('NEXT_PUBLIC_API_URL') || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Requêtes sans Origin : curl, same-origin navigateur sans header, mobile natif…
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.has(origin)) return callback(null, true);
+      // Évite les erreurs opaques en dev sous Windows (::1 vs 127.0.0.1, autres ports Next).
+      if (nodeEnv !== 'production' && isDevLocalOrigin(origin)) return callback(null, true);
+      return callback(null, false);
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Accept-Language',
+      'X-Requested-With',
+      'apikey',
+      'x-client-info',
+      'x-supabase-api-version',
+    ],
   });
+
+  // Sécurité HTTP — CORP par défaut (same-origin) casse souvent les appels SPA cross-origin
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      ...(nodeEnv !== 'production' ? { contentSecurityPolicy: false } : {}),
+    }),
+  );
+  app.use(compression());
 
   // Préfixe global API
   app.setGlobalPrefix('api/v1');
@@ -68,6 +106,7 @@ async function bootstrap() {
       .addTag('deals', 'Pipeline commercial')
       .addTag('projects', 'Gestion de projets')
       .addTag('tasks', 'Tâches')
+      .addTag('tickets', 'Tickets support')
       .addTag('interactions', 'Interactions')
       .addTag('documents', 'Documents')
       .addTag('notifications', 'Notifications')

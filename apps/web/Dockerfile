@@ -16,6 +16,7 @@ RUN npm run build
 
 FROM base AS production
 ENV NODE_ENV=production
+# Ne pas définir CRM_DEV_INSECURE_TLS ni NODE_TLS_REJECT_UNAUTHORIZED=0 (connexion refusée côté /api/auth/sign-in).
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public

@@ -3,9 +3,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
-import { Download, FileText, Trash2 } from 'lucide-react';
+import { Download, FileText, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 interface DocRow {
   id: string;
@@ -18,6 +18,15 @@ interface DocRow {
   contactId?: string;
   accountId?: string;
   createdAt: string;
+}
+
+function documentContext(d: DocRow) {
+  const parts: string[] = [];
+  if (d.dealId) parts.push(`Deal …${d.dealId.slice(-6)}`);
+  if (d.projectId) parts.push(`Projet …${d.projectId.slice(-6)}`);
+  if (d.contactId) parts.push(`Contact …${d.contactId.slice(-6)}`);
+  if (d.accountId) parts.push(`Entreprise …${d.accountId.slice(-6)}`);
+  return parts.length ? parts.join(' · ') : '—';
 }
 
 export function InternalDocumentsList({
@@ -37,6 +46,7 @@ export function InternalDocumentsList({
   const fileRef = useRef<HTMLInputElement>(null);
   const [desc, setDesc] = useState('');
   const [picked, setPicked] = useState<File | null>(null);
+  const [filter, setFilter] = useState('');
 
   const scoped = Boolean(dealId || contactId || projectId || accountId);
   const qs = new URLSearchParams();
@@ -90,14 +100,25 @@ export function InternalDocumentsList({
     }
   };
 
-  const ctx = (d: DocRow) => {
-    const parts: string[] = [];
-    if (d.dealId) parts.push(`Deal …${d.dealId.slice(-6)}`);
-    if (d.projectId) parts.push(`Projet …${d.projectId.slice(-6)}`);
-    if (d.contactId) parts.push(`Contact …${d.contactId.slice(-6)}`);
-    if (d.accountId) parts.push(`Entreprise …${d.accountId.slice(-6)}`);
-    return parts.length ? parts.join(' · ') : '—';
+  const formatSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+    return `${(bytes / 1024).toFixed(1)} Ko`;
   };
+
+  const filteredDocuments = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return documents;
+    return documents.filter((d) =>
+      [d.filename, d.description, d.mimeType, documentContext(d)]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q)),
+    );
+  }, [documents, filter]);
+
+  const totalSize = useMemo(
+    () => documents.reduce((sum, d) => sum + (Number.isFinite(d.size) ? d.size : 0), 0),
+    [documents],
+  );
 
   return (
     <div className="space-y-6">
@@ -132,11 +153,32 @@ export function InternalDocumentsList({
       </div>
 
       <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="px-4 py-3 border-b font-medium text-sm">{libraryTitle}</div>
+        <div className="px-4 py-3 border-b space-y-3">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium text-sm">{libraryTitle}</p>
+              <p className="text-xs text-muted-foreground">
+                {documents.length} document{documents.length > 1 ? 's' : ''} · {formatSize(totalSize)}
+              </p>
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="search"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filtrer les documents..."
+                className="w-full rounded-lg border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+        </div>
         {isLoading ? (
           <p className="p-6 text-sm text-muted-foreground">Chargement…</p>
         ) : documents.length === 0 ? (
           <p className="p-6 text-sm text-muted-foreground">Aucun document en base</p>
+        ) : filteredDocuments.length === 0 ? (
+          <p className="p-6 text-sm text-muted-foreground">Aucun document ne correspond au filtre.</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -148,7 +190,7 @@ export function InternalDocumentsList({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {documents.map((d) => (
+              {filteredDocuments.map((d) => (
                 <tr key={d.id} className="hover:bg-muted/20">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -159,12 +201,14 @@ export function InternalDocumentsList({
                           <p className="text-xs text-muted-foreground truncate">{d.description}</p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          {(d.size / 1024).toFixed(1)} Ko · {d.mimeType}
+                          {formatSize(d.size)} · {d.mimeType}
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">{ctx(d)}</td>
+                  <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
+                    {documentContext(d)}
+                  </td>
                   <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-xs">
                     {formatDate(d.createdAt)}
                   </td>
