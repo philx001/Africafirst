@@ -8,6 +8,11 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { TICKET_STATUSES, type TicketStatus } from '@crm/shared';
 import { toast } from 'sonner';
+import {
+  TicketDiscussion,
+  type TicketAttachmentRow,
+  type TicketCommentRow,
+} from '@/components/crm/tickets/ticket-discussion';
 
 interface TicketDetail {
   id: string;
@@ -17,12 +22,80 @@ interface TicketDetail {
   status: TicketStatus;
   priority: string;
   category: string;
+  slaDueAt?: string | null;
+  firstResponseAt?: string | null;
+  resolutionSlaDueAt?: string | null;
   createdAt: string;
   contact?: { id: string; firstName?: string; lastName?: string; email?: string | null };
   project?: { id: string; name: string };
   account?: { id: string; name: string };
   assignee?: { id: string; firstName?: string; lastName?: string };
   createdBy?: { firstName?: string; lastName?: string };
+  comments?: TicketCommentRow[];
+  documents?: TicketAttachmentRow[];
+}
+
+function TicketSlaBanner({
+  slaDueAt,
+  firstResponseAt,
+  resolutionSlaDueAt,
+  status,
+}: {
+  slaDueAt?: string | null;
+  firstResponseAt?: string | null;
+  resolutionSlaDueAt?: string | null;
+  status: TicketStatus;
+}) {
+  const terminal = status === 'resolved' || status === 'closed';
+  const showFirst = Boolean(slaDueAt || firstResponseAt);
+  const showRes = Boolean(resolutionSlaDueAt);
+  if (!showFirst && !showRes) return null;
+
+  const now = Date.now();
+  const firstOverdue = Boolean(slaDueAt && !firstResponseAt && now > new Date(slaDueAt).getTime());
+  const resOverdue = Boolean(
+    resolutionSlaDueAt && !terminal && now > new Date(resolutionSlaDueAt).getTime(),
+  );
+
+  return (
+    <div className="space-y-3">
+      {showFirst ? (
+        <div
+          className={`rounded-xl border p-4 text-sm ${firstOverdue ? 'border-destructive/50 bg-destructive/5' : 'bg-muted/30'}`}
+        >
+          <p className="font-medium mb-1">SLA première réponse</p>
+          {slaDueAt ? (
+            <p className={firstOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+              Objectif : {formatDate(slaDueAt)}
+              {firstOverdue ? ' — dépassé' : ''}
+            </p>
+          ) : null}
+          {firstResponseAt ? (
+            <p className="text-muted-foreground mt-1">Réponse enregistrée le : {formatDate(firstResponseAt)}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showRes ? (
+        <div
+          className={`rounded-xl border p-4 text-sm ${resOverdue ? 'border-destructive/50 bg-destructive/5' : 'bg-muted/30'}`}
+        >
+          <p className="font-medium mb-1">SLA résolution</p>
+          {resolutionSlaDueAt ? (
+            <p className={resOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}>
+              Objectif : {formatDate(resolutionSlaDueAt)}
+              {resOverdue ? ' — dépassé' : ''}
+            </p>
+          ) : null}
+          {terminal ? (
+            <p className="text-muted-foreground mt-1 text-xs">
+              Ticket au statut résolu ou fermé — comparer avec la date ci‑dessus pour le respect du SLA.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function TicketDetailPage() {
@@ -55,6 +128,9 @@ export default function TicketDetailPage() {
     );
   }
 
+  const comments = ticket.comments ?? [];
+  const attachments = ticket.documents ?? [];
+
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-4">
@@ -71,6 +147,13 @@ export default function TicketDetailPage() {
           <h1 className="text-2xl font-bold tracking-tight truncate">{ticket.title}</h1>
         </div>
       </div>
+
+      <TicketSlaBanner
+        slaDueAt={ticket.slaDueAt}
+        firstResponseAt={ticket.firstResponseAt}
+        resolutionSlaDueAt={ticket.resolutionSlaDueAt}
+        status={ticket.status}
+      />
 
       <div className="rounded-xl border bg-card p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -141,6 +224,8 @@ export default function TicketDetailPage() {
           </div>
         </dl>
       </div>
+
+      <TicketDiscussion ticketId={ticket.id} mode="internal" comments={comments} attachments={attachments} />
     </div>
   );
 }

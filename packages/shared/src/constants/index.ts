@@ -382,6 +382,24 @@ export const TICKET_STATUSES = [
   { id: 'closed', label: 'Fermé', color: '#64748b' },
 ] as const;
 
+/** SLA « première réponse » par priorité ticket (heures) — valeur plateforme par défaut. */
+export type TicketPrioritySlaKey = 'low' | 'medium' | 'high' | 'urgent';
+
+export const DEFAULT_TICKET_SLA_FIRST_RESPONSE_HOURS: Record<TicketPrioritySlaKey, number> = {
+  low: 48,
+  medium: 24,
+  high: 8,
+  urgent: 4,
+};
+
+/** SLA « résolution » (statut résolu ou fermé) depuis la création du ticket — défaut plateforme. */
+export const DEFAULT_TICKET_SLA_RESOLUTION_HOURS: Record<TicketPrioritySlaKey, number> = {
+  low: 168,
+  medium: 72,
+  high: 48,
+  urgent: 24,
+};
+
 export const USER_ROLES = {
   ADMIN: 'admin',
   MEMBER: 'member',
@@ -398,6 +416,14 @@ export const SUPABASE_BUCKETS = {
   DOCUMENTS: 'documents',
   AVATARS: 'avatars',
 } as const;
+
+/** Devises officiellement supportées dans le CRM (P5). */
+export const SUPPORTED_CURRENCIES = ['EUR', 'USD', 'XOF'] as const;
+export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
+
+/** Locales UI prioritaires (P5 base FR -> EN). */
+export const SUPPORTED_LOCALES = ['fr-FR', 'en-US'] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 export const AUTOMATION_TRIGGERS = [
   'contact.created',

@@ -2,9 +2,9 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { ContractActivityType, Prisma } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { PaginationDto } from '../common/pipes/pagination.pipe';
-import { AuthUser, OFFER_TYPES } from '@crm/shared';
+import { AuthUser, OFFER_TYPES, SUPPORTED_CURRENCIES } from '@crm/shared';
 import { NotificationsService } from '../notifications/notifications.service';
-import { IsEnum, IsOptional, IsString, IsArray, IsBoolean } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsArray, IsBoolean, IsIn } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -14,7 +14,10 @@ export class CreateQuoteDto {
   @ApiPropertyOptional() @IsOptional() @IsString() dealId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() contactId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() accountId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() currency?: string;
+  @ApiPropertyOptional({ enum: SUPPORTED_CURRENCIES })
+  @IsOptional()
+  @IsIn([...SUPPORTED_CURRENCIES])
+  currency?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) totalAmount?: number;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) taxAmount?: number;
   @ApiPropertyOptional() @IsOptional() @IsArray() lineItems?: Record<string, unknown>[];
@@ -51,7 +54,10 @@ export class CreateQuoteFromTemplateDto {
   @ApiPropertyOptional() @IsOptional() @IsString() dealId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() contactId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() accountId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() currency?: string;
+  @ApiPropertyOptional({ enum: SUPPORTED_CURRENCIES })
+  @IsOptional()
+  @IsIn([...SUPPORTED_CURRENCIES])
+  currency?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) totalAmount?: number;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) taxAmount?: number;
   @ApiPropertyOptional() @IsOptional() @IsArray() lineItems?: Record<string, unknown>[];
@@ -197,7 +203,7 @@ export class QuotesService {
           where: { id: dto.accountId, organizationId: user.organizationId },
         })
       : null;
-    let deal = dto.dealId
+    const deal = dto.dealId
       ? await this.prisma.deal.findFirst({
           where: { id: dto.dealId, organizationId: user.organizationId },
           select: {

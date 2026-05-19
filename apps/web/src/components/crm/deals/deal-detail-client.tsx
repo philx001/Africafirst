@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { DealContractTunnel } from '@/components/crm/deals/deal-contract-tunnel';
 import { InternalDocumentsList } from '@/components/crm/documents/internal-documents-list';
+import { EntityActivityTimeline } from '@/components/crm/activity/entity-activity-timeline';
 import { OFFER_TYPES, type OfferType } from '@crm/shared';
 import { toast } from 'sonner';
 
@@ -76,6 +77,8 @@ export function DealDetailClient({ dealId }: { dealId: string }) {
           ))}
         </select>
       </div>
+
+      <EntityActivityTimeline variant={{ mode: 'deal', dealId, contactId: deal?.contactId }} />
 
       <InternalDocumentsList dealId={dealId} libraryTitle="Documents du deal" />
 

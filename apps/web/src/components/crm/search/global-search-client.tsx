@@ -65,23 +65,6 @@ export function GlobalSearchClient() {
     enabled: q.length >= 2,
   });
 
-  if (q.length < 2) {
-    return (
-      <p className="text-sm text-muted-foreground rounded-xl border bg-card px-4 py-8 text-center">
-        Saisissez au moins 2 caractères (utilisez la barre de recherche ou l’URL <code className="text-xs">?q=</code>
-        ).
-      </p>
-    );
-  }
-
-  const empty =
-    data &&
-    !data.contacts.length &&
-    !data.accounts.length &&
-    !data.deals.length &&
-    !data.projects.length &&
-    !data.tasks.length;
-
   const categoryCounts = useMemo(() => {
     if (!data) return null;
     return {
@@ -98,6 +81,23 @@ export function GlobalSearchClient() {
       tasks: data.tasks.length,
     } satisfies Record<SearchCategory, number>;
   }, [data]);
+
+  if (q.length < 2) {
+    return (
+      <p className="text-sm text-muted-foreground rounded-xl border bg-card px-4 py-8 text-center">
+        Saisissez au moins 2 caractères (utilisez la barre de recherche ou l’URL <code className="text-xs">?q=</code>
+        ).
+      </p>
+    );
+  }
+
+  const empty =
+    data &&
+    !data.contacts.length &&
+    !data.accounts.length &&
+    !data.deals.length &&
+    !data.projects.length &&
+    !data.tasks.length;
 
   const showCategory = (category: SearchCategory) =>
     activeCategory === 'all' || activeCategory === category;

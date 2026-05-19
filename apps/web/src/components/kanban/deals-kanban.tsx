@@ -120,8 +120,19 @@ export function DealsKanban() {
   const updateStageMutation = useMutation({
     mutationFn: ({ id, stage }: { id: string; stage: DealStage }) =>
       api.put(`/deals/${id}`, { stage }),
-    onSuccess: () => {
+    onSuccess: (data, { id: dealId, stage }) => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['deals', 'kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['projects', { dealId }] });
+      if (stage === 'won') {
+        const onboardingId =
+          typeof data === 'object' && data !== null && 'onboardingProjectCreatedId' in data
+            ? (data as { onboardingProjectCreatedId?: string }).onboardingProjectCreatedId
+            : undefined;
+        if (onboardingId) {
+          toast.success('Deal gagné — projet d’onboarding créé.');
+        }
+      }
     },
     onError: () => toast.error('Erreur lors du déplacement du deal'),
   });

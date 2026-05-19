@@ -55,7 +55,8 @@ export type NotificationType =
   | 'contract_pending_signature'
   | 'contract_signed'
   | 'ticket_created'
-  | 'ticket_assigned';
+  | 'ticket_assigned'
+  | 'ticket_comment';
 
 export type AutomationTrigger =
   | 'contact.created'

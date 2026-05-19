@@ -13,11 +13,25 @@ import { toast } from 'sonner';
 
 type NotificationRow = {
   id: string;
+  type?: string;
   title: string;
   body?: string | null;
+  payload?: Record<string, unknown> | null;
   createdAt: string;
   readAt?: string | null;
 };
+
+const TICKET_NOTIFICATION_TYPES = new Set([
+  'mention',
+  'ticket_created',
+  'ticket_assigned',
+  'ticket_comment',
+]);
+
+function ticketIdFromPayload(n: NotificationRow): string | null {
+  const raw = n.payload?.ticketId;
+  return typeof raw === 'string' ? raw : null;
+}
 
 type CurrentUser = { id: string; email: string; role: string };
 
@@ -159,6 +173,11 @@ export function TopBar({ user: _user }: { user: User }) {
                           await queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
                         } catch {
                           /* ignore */
+                        }
+                        const tid = ticketIdFromPayload(n);
+                        if (tid && n.type && TICKET_NOTIFICATION_TYPES.has(n.type)) {
+                          setShowNotifications(false);
+                          router.push(`/tickets/${tid}`);
                         }
                       }}
                       title="Marquer comme lu"

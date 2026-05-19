@@ -50,7 +50,7 @@ export function DealQuickCreate() {
         ...(accountId ? { accountId } : {}),
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: unknown) => {
       setTitle('');
       setStage('lead');
       setValueRaw('');
@@ -60,6 +60,18 @@ export function DealQuickCreate() {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['deals', 'kanban'] });
       toast.success('Deal créé');
+      const oid =
+        typeof data === 'object' && data !== null && 'onboardingProjectCreatedId' in data
+          ? (data as { onboardingProjectCreatedId?: string }).onboardingProjectCreatedId
+          : undefined;
+      const createdId =
+        typeof data === 'object' && data !== null && 'id' in data
+          ? (data as { id?: string }).id
+          : undefined;
+      if (oid && createdId) {
+        queryClient.invalidateQueries({ queryKey: ['projects', { dealId: createdId }] });
+      }
+      if (oid) toast.success('Projet d’onboarding créé pour ce deal gagné.');
     },
     onError: (err: unknown) => {
       let msg = 'Création du deal impossible';

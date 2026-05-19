@@ -46,4 +46,10 @@ export class AutomationsController {
   ensureProviderDefaults(@CurrentUser() user: AuthUser) {
     return this.automationsService.ensureProviderDefaultRules(user);
   }
+
+  @Post('templates/deal-won-defaults')
+  @ApiOperation({ summary: 'Installer les templates metier deal.won (offre -> actions)' })
+  ensureDealWonDefaults(@CurrentUser() user: AuthUser) {
+    return this.automationsService.ensureDealWonDefaultRules(user);
+  }
 }

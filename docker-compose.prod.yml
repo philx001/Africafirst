@@ -1,0 +1,108 @@
+version: '3.9'
+
+# ============================================================
+# CRM Africa First — Déploiement Production
+# Usage : docker compose -f docker-compose.prod.yml up -d
+# Prérequis : fichier .env avec toutes les variables de prod
+# Les migrations Prisma doivent être appliquées AVANT le start
+# (via la CI ou : docker compose -f ... run --rm api-migrate)
+# ============================================================
+
+services:
+  # ----------------------------------------------------------
+  # REDIS — File BullMQ (persistance AOF activée)
+  # ----------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis-prod
+    restart: always
+    ports:
+      - '127.0.0.1:6379:6379'   # écoute localhost uniquement
+    volumes:
+      - redis-data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD requis en prod}
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------
+  # JOB : migrations Prisma (s'arrête après exécution)
+  # Lancer manuellement avant le démarrage ou dans la CI.
+  # ----------------------------------------------------------
+  api-migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    container_name: crm-migrate
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    working_dir: /app/apps/api
+    command: ['npx', 'prisma', 'migrate', 'deploy']
+    depends_on:
+      redis:
+        condition: service_healthy
+    profiles:
+      - migrate
+
+  # ----------------------------------------------------------
+  # API — Backend NestJS
+  # ----------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: production
+    container_name: crm-api-prod
+    restart: always
+    ports:
+      - '${API_PORT:-3001}:3001'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ----------------------------------------------------------
+  # WEB — Frontend Next.js
+  # ----------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: production
+    container_name: crm-web-prod
+    restart: always
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  default:
+    name: crm-network-prod

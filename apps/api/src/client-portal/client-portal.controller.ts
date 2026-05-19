@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Param, Body, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Body, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { ClientPortalService } from './client-portal.service';
-import { TicketsService, CreateClientTicketDto } from '../tickets/tickets.service';
+import { TicketsService, CreateClientTicketDto, AddTicketCommentDto } from '../tickets/tickets.service';
 import { CurrentUser, Roles } from '../common/decorators/auth.decorator';
 import { AuthUser } from '@crm/shared';
 import { Request } from 'express';
@@ -96,15 +97,37 @@ export class ClientPortalController {
     return this.ticketsService.findAllForPortal(user);
   }
 
-  @Get('tickets/:id')
-  @ApiOperation({ summary: 'Détail d’un ticket (portail client)' })
-  getTicket(@Param('id') id: string, @CurrentUser() user: AuthUser) {
-    return this.ticketsService.findOne(id, user);
-  }
-
   @Post('tickets')
   @ApiOperation({ summary: 'Créer un ticket depuis le portail' })
   createTicket(@CurrentUser() user: AuthUser, @Body() body: CreateClientTicketDto) {
     return this.ticketsService.createFromPortal(body, user);
+  }
+
+  @Post('tickets/:id/comments')
+  @ApiOperation({ summary: 'Ajouter un commentaire sur un ticket (portail)' })
+  addTicketComment(
+    @Param('id') id: string,
+    @Body() dto: AddTicketCommentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ticketsService.addComment(id, dto, user);
+  }
+
+  @Post('tickets/:id/attachments')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Joindre un fichier au ticket (portail)' })
+  @UseInterceptors(FileInterceptor('file'))
+  uploadTicketAttachment(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ticketsService.uploadAttachment(id, file, user);
+  }
+
+  @Get('tickets/:id')
+  @ApiOperation({ summary: 'Détail d’un ticket (portail client)' })
+  getTicket(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.ticketsService.findOne(id, user);
   }
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { DashboardStats } from '@/components/crm/dashboard/dashboard-stats';
+import { DashboardExports } from '@/components/crm/dashboard/dashboard-exports';
 import { RecentDeals } from '@/components/crm/dashboard/recent-deals';
 import { RecentTasks } from '@/components/crm/dashboard/recent-tasks';
 
@@ -14,6 +15,7 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Vue d'ensemble de votre activité</p>
       </div>
       <DashboardStats />
+      <DashboardExports />
       <div className="rounded-xl border bg-card p-4">
         <h2 className="font-semibold mb-3">Actions rapides</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">

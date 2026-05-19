@@ -1,9 +1,22 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import {
   TicketsService,
   CreateTicketDto,
   UpdateTicketDto,
+  AddTicketCommentDto,
 } from './tickets.service';
 import { PaginationDto } from '../common/pipes/pagination.pipe';
 import { CurrentUser, Roles } from '../common/decorators/auth.decorator';
@@ -41,6 +54,30 @@ export class TicketsController {
       accountId,
       assigneeId,
     });
+  }
+
+  @Post(':id/comments')
+  @Roles('admin', 'member')
+  @ApiOperation({ summary: 'Ajouter un commentaire au ticket' })
+  addComment(
+    @Param('id') id: string,
+    @Body() dto: AddTicketCommentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ticketsService.addComment(id, dto, user);
+  }
+
+  @Post(':id/attachments')
+  @Roles('admin', 'member')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Joindre un fichier au ticket' })
+  @UseInterceptors(FileInterceptor('file'))
+  uploadAttachment(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.ticketsService.uploadAttachment(id, file, user);
   }
 
   @Get(':id')

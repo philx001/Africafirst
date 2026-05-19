@@ -47,6 +47,7 @@ model Organization {
   contractTemplates ContractTemplate[]
   projectTemplates ProjectTemplate[]
   tickets          Ticket[]
+  ticketComments   TicketComment[]
 
   @@map("organizations")
 }
@@ -82,6 +83,7 @@ model User {
   notifications    Notification[]
   sentMessages     Message[]      @relation("MessageSender")
   receivedMessages Message[]      @relation("MessageRecipient")
+  ticketComments   TicketComment[] @relation("TicketCommentAuthor")
 
   @@unique([email, organizationId])
   @@index([organizationId])
@@ -584,8 +586,17 @@ model Ticket {
 
   resolvedAt DateTime?
   closedAt   DateTime?
+  /// Échéance de première réponse (calculée selon la priorité à la création).
+  slaDueAt          DateTime?
+  /// Échéance de résolution / passage au statut résolu ou fermé (création + SLA résolution).
+  resolutionSlaDueAt DateTime?
+  /// Premier commentaire publié par un utilisateur interne (admin / member).
+  firstResponseAt DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  comments   TicketComment[]
+  documents  Document[]
 
   @@unique([organizationId, ticketNumber])
   @@index([organizationId])
@@ -595,6 +606,27 @@ model Ticket {
   @@index([status, organizationId])
   @@index([assigneeId])
   @@map("tickets")
+}
+
+model TicketComment {
+  id             String   @id @default(cuid())
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User @relation("TicketCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([ticketId])
+  @@index([authorId])
+  @@map("ticket_comments")
 }
 
 // ============================================================
@@ -666,11 +698,15 @@ model Document {
   accountId String?
   account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
 
+  ticketId String?
+  ticket   Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
   contract Contract?
 
   @@index([organizationId])
   @@index([contactId])
   @@index([projectId])
+  @@index([ticketId])
   @@map("documents")
 }
 
@@ -904,6 +940,7 @@ enum NotificationType {
   contract_signed
   ticket_created
   ticket_assigned
+  ticket_comment
 }
 
 enum WorkflowStatus {

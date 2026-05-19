@@ -124,7 +124,11 @@ export class ClientPortalService {
     const contactId = this.assertClient(user);
 
     const document = await this.prisma.document.findFirst({
-      where: { id: documentId, contactId, organizationId: user.organizationId },
+      where: {
+        id: documentId,
+        organizationId: user.organizationId,
+        OR: [{ contactId }, { ticket: { contactId } }],
+      },
     });
 
     if (!document) throw new NotFoundException('Document introuvable');

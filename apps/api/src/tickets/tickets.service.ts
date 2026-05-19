@@ -4,16 +4,24 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, Priority } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DocumentsService } from '../documents/documents.service';
 import { PaginationDto } from '../common/pipes/pagination.pipe';
 import { AuthUser, TicketStatus } from '@crm/shared';
+import {
+  computeTicketFirstResponseSlaDueAt,
+  computeTicketResolutionSlaDueAt,
+} from './ticket-sla.helper';
+import { extractMentionEmails } from './ticket-mention.helper';
 import {
   IsOptional,
   IsString,
   IsEnum,
   IsIn,
+  MinLength,
+  MaxLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -58,6 +66,10 @@ export class CreateClientTicketDto {
   @ApiPropertyOptional() @IsOptional() @IsString() projectId?: string;
 }
 
+export class AddTicketCommentDto {
+  @ApiProperty() @IsString() @MinLength(1) @MaxLength(12000) body: string;
+}
+
 const ticketInclude = {
   contact: { select: { id: true, firstName: true, lastName: true, email: true } },
   project: { select: { id: true, name: true } },
@@ -66,11 +78,39 @@ const ticketInclude = {
   createdBy: { select: { id: true, firstName: true, lastName: true } },
 } satisfies Prisma.TicketInclude;
 
+const ticketDetailInclude = {
+  contact: ticketInclude.contact,
+  project: ticketInclude.project,
+  account: ticketInclude.account,
+  assignee: ticketInclude.assignee,
+  createdBy: ticketInclude.createdBy,
+  comments: {
+    orderBy: { createdAt: 'asc' as const },
+    include: {
+      author: {
+        select: { id: true, firstName: true, lastName: true, email: true, role: true },
+      },
+    },
+  },
+  documents: {
+    orderBy: { createdAt: 'desc' as const },
+    select: {
+      id: true,
+      filename: true,
+      mimeType: true,
+      size: true,
+      createdAt: true,
+      ticketId: true,
+    },
+  },
+} satisfies Prisma.TicketInclude;
+
 @Injectable()
 export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly documents: DocumentsService,
   ) {}
 
   private async nextTicketNumber(
@@ -148,20 +188,105 @@ export class TicketsService {
     return patch;
   }
 
-  private async notifyAdminsNewTicket(organizationId: string, ticketId: string, title: string) {
-    const admins = await this.prisma.user.findMany({
-      where: { organizationId, role: 'admin', isActive: true },
+  private async notifyInternalTeamNewTicket(organizationId: string, ticketId: string, title: string) {
+    const team = await this.prisma.user.findMany({
+      where: { organizationId, role: { in: ['admin', 'member'] }, isActive: true },
       select: { id: true },
     });
     await Promise.all(
-      admins.map((a) =>
+      team.map((u) =>
         this.notifications.create({
-          userId: a.id,
+          userId: u.id,
           organizationId,
           type: 'ticket_created',
           title: 'Nouveau ticket',
           body: title.slice(0, 200),
           payload: { ticketId },
+        }),
+      ),
+    );
+  }
+
+  private async notifyInternalTeamTicketComment(
+    organizationId: string,
+    ticketId: string,
+    title: string,
+    commentBody: string,
+  ) {
+    const team = await this.prisma.user.findMany({
+      where: { organizationId, role: { in: ['admin', 'member'] }, isActive: true },
+      select: { id: true },
+    });
+    const preview = `${title.slice(0, 80)} — ${commentBody.trim().slice(0, 120)}`;
+    await Promise.all(
+      team.map((u) =>
+        this.notifications.create({
+          userId: u.id,
+          organizationId,
+          type: 'ticket_comment',
+          title: 'Message client sur ticket',
+          body: preview.slice(0, 200),
+          payload: { ticketId },
+        }),
+      ),
+    );
+  }
+
+  private async notifyClientTicketReply(
+    organizationId: string,
+    ticket: { id: string; title: string; contactId: string | null },
+  ) {
+    if (!ticket.contactId) return;
+    const clientUser = await this.prisma.user.findFirst({
+      where: { organizationId, role: 'client', contactId: ticket.contactId, isActive: true },
+      select: { id: true },
+    });
+    if (!clientUser) return;
+    await this.notifications.create({
+      userId: clientUser.id,
+      organizationId,
+      type: 'ticket_comment',
+      title: 'Réponse sur votre ticket',
+      body: ticket.title.slice(0, 200),
+      payload: { ticketId: ticket.id },
+    });
+  }
+
+  /** Mentions `@email` réservées aux auteurs internes — notif `mention`, sans doublon par destinataire. */
+  private async notifyTicketCommentMentions(
+    organizationId: string,
+    ticketId: string,
+    ticketTitle: string,
+    body: string,
+    authorId: string,
+    commentId: string,
+  ) {
+    const emails = extractMentionEmails(body);
+    if (emails.length === 0) return;
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        organizationId,
+        role: { in: ['admin', 'member'] },
+        isActive: true,
+        id: { not: authorId },
+        OR: emails.map((email) => ({
+          email: { equals: email, mode: 'insensitive' as const },
+        })),
+      },
+      select: { id: true },
+    });
+
+    const preview = `Mention — ${ticketTitle.slice(0, 120)}`.slice(0, 200);
+    await Promise.all(
+      users.map((u) =>
+        this.notifications.create({
+          userId: u.id,
+          organizationId,
+          type: 'mention',
+          title: 'Mention sur un ticket',
+          body: preview,
+          payload: { ticketId, commentId },
         }),
       ),
     );
@@ -195,12 +320,20 @@ export class TicketsService {
 
     const ticket = await this.prisma.$transaction(async (tx) => {
       const ticketNumber = await this.nextTicketNumber(tx, user.organizationId);
+      const priority = (dto.priority ?? 'medium') as Priority;
+      const orgRow = await tx.organization.findUnique({
+        where: { id: user.organizationId },
+        select: { settings: true },
+      });
+      const anchor = new Date();
+      const slaDueAt = computeTicketFirstResponseSlaDueAt(anchor, priority, orgRow?.settings);
+      const resolutionSlaDueAt = computeTicketResolutionSlaDueAt(anchor, priority, orgRow?.settings);
       return tx.ticket.create({
         data: {
           ticketNumber,
           title: dto.title,
           description: dto.description,
-          priority: dto.priority ?? 'medium',
+          priority,
           category: dto.category ?? 'support',
           organizationId: user.organizationId,
           contactId: dto.contactId,
@@ -208,6 +341,8 @@ export class TicketsService {
           accountId: dto.accountId,
           assigneeId: dto.assigneeId,
           createdById: user.id,
+          slaDueAt,
+          resolutionSlaDueAt,
         },
         include: ticketInclude,
       });
@@ -246,23 +381,36 @@ export class TicketsService {
 
     const ticket = await this.prisma.$transaction(async (tx) => {
       const ticketNumber = await this.nextTicketNumber(tx, user.organizationId);
+      const orgRow = await tx.organization.findUnique({
+        where: { id: user.organizationId },
+        select: { settings: true },
+      });
+      const anchor = new Date();
+      const slaDueAt = computeTicketFirstResponseSlaDueAt(anchor, Priority.medium, orgRow?.settings);
+      const resolutionSlaDueAt = computeTicketResolutionSlaDueAt(
+        anchor,
+        Priority.medium,
+        orgRow?.settings,
+      );
       return tx.ticket.create({
         data: {
           ticketNumber,
           title: dto.title,
           description: dto.description,
-          priority: 'medium',
+          priority: Priority.medium,
           category: 'support',
           organizationId: user.organizationId,
           contactId: user.contactId,
           projectId: dto.projectId,
           createdById: user.id,
+          slaDueAt,
+          resolutionSlaDueAt,
         },
         include: ticketInclude,
       });
     });
 
-    await this.notifyAdminsNewTicket(user.organizationId, ticket.id, ticket.title);
+    await this.notifyInternalTeamNewTicket(user.organizationId, ticket.id, ticket.title);
 
     return ticket;
   }
@@ -331,7 +479,7 @@ export class TicketsService {
   async findOne(id: string, user: AuthUser) {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id, organizationId: user.organizationId },
-      include: ticketInclude,
+      include: ticketDetailInclude,
     });
     if (!ticket) throw new NotFoundException('Ticket introuvable');
 
@@ -367,6 +515,27 @@ export class TicketsService {
       assigneeId: nextAssignee,
     });
 
+    const orgRow = await this.prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { settings: true },
+    });
+
+    const slaPatch =
+      dto.priority !== undefined && dto.priority !== existing.priority
+        ? {
+            slaDueAt: computeTicketFirstResponseSlaDueAt(
+              existing.createdAt,
+              dto.priority as Priority,
+              orgRow?.settings,
+            ),
+            resolutionSlaDueAt: computeTicketResolutionSlaDueAt(
+              existing.createdAt,
+              dto.priority as Priority,
+              orgRow?.settings,
+            ),
+          }
+        : {};
+
     const side = this.statusSideEffects(dto.status, existing.status);
 
     const { status, ...rest } = dto;
@@ -375,6 +544,7 @@ export class TicketsService {
       data: {
         ...rest,
         ...(status !== undefined ? { status } : {}),
+        ...slaPatch,
         ...side,
       },
       include: ticketInclude,
@@ -391,6 +561,101 @@ export class TicketsService {
     }
 
     return ticket;
+  }
+
+  async addComment(ticketId: string, dto: AddTicketCommentDto, user: AuthUser) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, organizationId: user.organizationId },
+      select: {
+        id: true,
+        title: true,
+        contactId: true,
+        firstResponseAt: true,
+      },
+    });
+    if (!ticket) throw new NotFoundException('Ticket introuvable');
+
+    if (user.role === 'client') {
+      if (!user.contactId || ticket.contactId !== user.contactId) {
+        throw new ForbiddenException('Accès refusé');
+      }
+    }
+
+    const trimmed = dto.body.trim();
+
+    const comment = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.ticketComment.create({
+        data: {
+          body: trimmed,
+          organizationId: user.organizationId,
+          ticketId,
+          authorId: user.id,
+        },
+        include: {
+          author: {
+            select: { id: true, firstName: true, lastName: true, email: true, role: true },
+          },
+        },
+      });
+
+      const isInternal = user.role === 'admin' || user.role === 'member';
+      if (isInternal && !ticket.firstResponseAt) {
+        await tx.ticket.update({
+          where: { id: ticketId },
+          data: { firstResponseAt: new Date() },
+        });
+      }
+
+      return created;
+    });
+
+    if (user.role === 'client') {
+      await this.notifyInternalTeamTicketComment(
+        user.organizationId,
+        ticket.id,
+        ticket.title,
+        trimmed,
+      );
+    } else if (ticket.contactId) {
+      await this.notifyClientTicketReply(user.organizationId, ticket);
+    }
+
+    if (user.role === 'admin' || user.role === 'member') {
+      await this.notifyTicketCommentMentions(
+        user.organizationId,
+        ticket.id,
+        ticket.title,
+        trimmed,
+        user.id,
+        comment.id,
+      );
+    }
+
+    return comment;
+  }
+
+  async uploadAttachment(ticketId: string, file: Express.Multer.File | undefined, user: AuthUser) {
+    if (!file?.buffer?.length) throw new BadRequestException('Fichier requis');
+
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, organizationId: user.organizationId },
+      select: { id: true, contactId: true },
+    });
+    if (!ticket) throw new NotFoundException('Ticket introuvable');
+    if (user.role === 'client') {
+      if (!user.contactId || ticket.contactId !== user.contactId) {
+        throw new ForbiddenException('Accès refusé');
+      }
+    }
+
+    return this.documents.upload(
+      {
+        file,
+        organizationId: user.organizationId,
+        ticketId,
+      },
+      user,
+    );
   }
 
   async remove(id: string, user: AuthUser) {

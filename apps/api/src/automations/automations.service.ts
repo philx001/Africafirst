@@ -16,6 +16,13 @@ export class CreateAutomationRuleDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isEnabled?: boolean;
 }
 
+type AutomationCondition = {
+  path?: string;
+  op?: string;
+  operator?: string;
+  value?: unknown;
+};
+
 @Injectable()
 export class AutomationsService {
   private readonly logger = new Logger(AutomationsService.name);
@@ -24,6 +31,91 @@ export class AutomationsService {
     private readonly prisma: PrismaService,
     @InjectQueue('automations') private readonly automationQueue: Queue,
   ) {}
+
+  private getByPath(payload: unknown, path: string): unknown {
+    if (!path.trim()) return payload;
+    return path
+      .split('.')
+      .filter(Boolean)
+      .reduce<unknown>((acc, key) => {
+        if (acc && typeof acc === 'object' && key in (acc as Record<string, unknown>)) {
+          return (acc as Record<string, unknown>)[key];
+        }
+        return undefined;
+      }, payload);
+  }
+
+  private compareValues(left: unknown, right: unknown): number {
+    const leftNum = typeof left === 'number' ? left : Number(left);
+    const rightNum = typeof right === 'number' ? right : Number(right);
+    if (Number.isFinite(leftNum) && Number.isFinite(rightNum)) {
+      return leftNum === rightNum ? 0 : leftNum > rightNum ? 1 : -1;
+    }
+    const l = String(left ?? '').toLowerCase();
+    const r = String(right ?? '').toLowerCase();
+    if (l === r) return 0;
+    return l > r ? 1 : -1;
+  }
+
+  private evaluateCondition(payload: unknown, condition: AutomationCondition): boolean {
+    const path = (condition.path ?? '').trim();
+    const op = String(condition.operator ?? condition.op ?? 'eq').toLowerCase();
+    const expected = condition.value;
+    const current = this.getByPath(payload, path);
+
+    switch (op) {
+      case 'eq':
+      case 'equals':
+        return String(current ?? '') === String(expected ?? '');
+      case 'neq':
+      case 'not_equals':
+        return String(current ?? '') !== String(expected ?? '');
+      case 'contains':
+        return String(current ?? '')
+          .toLowerCase()
+          .includes(String(expected ?? '').toLowerCase());
+      case 'not_contains':
+        return !String(current ?? '')
+          .toLowerCase()
+          .includes(String(expected ?? '').toLowerCase());
+      case 'starts_with':
+        return String(current ?? '')
+          .toLowerCase()
+          .startsWith(String(expected ?? '').toLowerCase());
+      case 'ends_with':
+        return String(current ?? '')
+          .toLowerCase()
+          .endsWith(String(expected ?? '').toLowerCase());
+      case 'gt':
+        return this.compareValues(current, expected) > 0;
+      case 'gte':
+        return this.compareValues(current, expected) >= 0;
+      case 'lt':
+        return this.compareValues(current, expected) < 0;
+      case 'lte':
+        return this.compareValues(current, expected) <= 0;
+      case 'in': {
+        const arr = Array.isArray(expected) ? expected : [expected];
+        return arr.map((x) => String(x ?? '')).includes(String(current ?? ''));
+      }
+      case 'not_in': {
+        const arr = Array.isArray(expected) ? expected : [expected];
+        return !arr.map((x) => String(x ?? '')).includes(String(current ?? ''));
+      }
+      case 'exists':
+        return current !== null && current !== undefined;
+      case 'not_exists':
+        return current === null || current === undefined;
+      default:
+        return false;
+    }
+  }
+
+  matchesRuleConditions(conditionsRaw: unknown, payload: unknown): boolean {
+    const conditions = Array.isArray(conditionsRaw) ? (conditionsRaw as AutomationCondition[]) : [];
+    if (conditions.length === 0) return true;
+    return conditions.every((c) => this.evaluateCondition(payload, c));
+  }
 
   async create(dto: CreateAutomationRuleDto, user: AuthUser) {
     return this.prisma.automationRule.create({
@@ -183,6 +275,99 @@ export class AutomationsService {
     return { created, existing, integrationWebhookConfigured: Boolean(integrationWebhookUrl) };
   }
 
+  async ensureDealWonDefaultRules(user: AuthUser) {
+    const templates: Array<{
+      name: string;
+      description: string;
+      conditions: Array<Record<string, unknown>>;
+      actions: Array<Record<string, unknown>>;
+    }> = [
+      {
+        name: 'Deal gagne (formation) -> suivi onboarding',
+        description: 'Quand un deal formation est gagne, creer une tache de suivi onboarding.',
+        conditions: [{ path: 'offerType', operator: 'eq', value: 'formation_admin' }],
+        actions: [
+          {
+            type: 'create_task',
+            title: 'Onboarding formation: planifier kickoff',
+            description: 'Confirmer les dates de demarrage et les interlocuteurs clefs.',
+            priority: 'high',
+            dueInHours: 24,
+            assigneeId: user.id,
+          },
+        ],
+      },
+      {
+        name: 'Deal gagne (conseil IA) -> cadrage',
+        description: 'Quand un deal conseil IA est gagne, ouvrir la tache de cadrage initial.',
+        conditions: [{ path: 'offerType', operator: 'eq', value: 'conseil_ia' }],
+        actions: [
+          {
+            type: 'create_task',
+            title: 'Cadrage conseil IA: atelier de lancement',
+            description: 'Preparer objectifs, perimetre et planning du premier atelier.',
+            priority: 'high',
+            dueInHours: 24,
+            assigneeId: user.id,
+          },
+          {
+            type: 'create_notification',
+            title: 'Nouveau deal conseil IA gagne',
+            body: 'Declencher le playbook de demarrage conseil IA.',
+            assigneeId: user.id,
+          },
+        ],
+      },
+      {
+        name: 'Deal gagne (dev automation) -> preparation build',
+        description: 'Quand un deal dev/automation est gagne, lancer la preparation technique.',
+        conditions: [{ path: 'offerType', operator: 'eq', value: 'dev_automation' }],
+        actions: [
+          {
+            type: 'create_task',
+            title: 'Preparation build: cadrage technique',
+            description: 'Collecter acces, besoins et contraintes pour demarrage implementation.',
+            priority: 'urgent',
+            dueInHours: 12,
+            assigneeId: user.id,
+          },
+        ],
+      },
+    ];
+
+    const created: string[] = [];
+    const existing: string[] = [];
+
+    for (const template of templates) {
+      const already = await this.prisma.automationRule.findFirst({
+        where: {
+          organizationId: user.organizationId,
+          trigger: 'deal.won',
+          name: template.name,
+        },
+        select: { id: true },
+      });
+      if (already) {
+        existing.push(template.name);
+        continue;
+      }
+      await this.prisma.automationRule.create({
+        data: {
+          name: template.name,
+          description: template.description,
+          trigger: 'deal.won',
+          conditions: template.conditions as unknown as Prisma.InputJsonValue,
+          actions: template.actions as unknown as Prisma.InputJsonValue,
+          isEnabled: true,
+          organizationId: user.organizationId,
+        },
+      });
+      created.push(template.name);
+    }
+
+    return { created, existing };
+  }
+
   /**
    * Point d'entrée principal : déclenche les règles d'automatisation correspondant au trigger.
    * Les règles synchrones (légères) sont exécutées immédiatement.
@@ -194,6 +379,10 @@ export class AutomationsService {
     });
 
     for (const rule of rules) {
+      if (!this.matchesRuleConditions(rule.conditions, payload)) {
+        await this.executeRule(rule, payload, organizationId);
+        continue;
+      }
       const actions = rule.actions as Array<{ type: string; [k: string]: unknown }>;
       const hasWebhook = actions.some((a) => a.type === 'send_webhook');
 
@@ -228,6 +417,21 @@ export class AutomationsService {
   ) {
     const start = Date.now();
     const actions = rule.actions as Array<{ type: string; [k: string]: unknown }>;
+    const shouldRun = this.matchesRuleConditions(rule.conditions, payload);
+
+    if (!shouldRun) {
+      await this.prisma.workflowLog.create({
+        data: {
+          ruleId: rule.id,
+          organizationId,
+          status: 'skipped',
+          input: payload as object,
+          error: 'Conditions non satisfaites',
+          durationMs: Date.now() - start,
+        },
+      });
+      return;
+    }
 
     try {
       for (const action of actions) {

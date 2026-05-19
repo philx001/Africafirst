@@ -6,7 +6,7 @@ import {
 import { ContractActivityType, ContractStatus, Prisma, SignatureProvider } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service';
 import { PaginationDto } from '../common/pipes/pagination.pipe';
-import { AuthUser } from '@crm/shared';
+import { AuthUser, SUPPORTED_CURRENCIES } from '@crm/shared';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { AutomationsService } from '../automations/automations.service';
@@ -23,7 +23,10 @@ export class CreateContractDto {
   @ApiPropertyOptional() @IsOptional() @IsString() quoteId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() contactId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() accountId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() currency?: string;
+  @ApiPropertyOptional({ enum: SUPPORTED_CURRENCIES })
+  @IsOptional()
+  @IsIn([...SUPPORTED_CURRENCIES])
+  currency?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) value?: number;
   @ApiPropertyOptional() @IsOptional() @IsString() documentId?: string;
   @ApiPropertyOptional({ enum: ContractActivityType })
@@ -58,7 +61,10 @@ export class CreateContractFromTemplateDto {
   @ApiPropertyOptional() @IsOptional() @IsString() dealId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() folderId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() folderPath?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() currency?: string;
+  @ApiPropertyOptional({ enum: SUPPORTED_CURRENCIES })
+  @IsOptional()
+  @IsIn([...SUPPORTED_CURRENCIES])
+  currency?: string;
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() value?: number;
 }
 
@@ -639,7 +645,7 @@ export class ContractsService {
           where: { id: dto.accountId, organizationId: user.organizationId },
         })
       : null;
-    let deal = dto.dealId
+    const deal = dto.dealId
       ? await this.prisma.deal.findFirst({
           where: { id: dto.dealId, organizationId: user.organizationId },
         })
@@ -1008,7 +1014,8 @@ export class ContractsService {
 
   /**
    * Tunnel métier : après signature, deal → won si besoin, création idempotente d’un projet
-   * d’onboarding (tag tunnel_onboarding) avec phases par défaut.
+   * d’onboarding (tag tunnel_onboarding) avec phases via modèle d’organisation ou défauts.
+   * Idempotent avec le passage manuel du deal en « won » (voir DealsService.ensureOnboardingProjectForWonDeal).
    * Désactivable : organization.settings.disableAutoOnboardingProject === true
    */
   private async ensureTunnelOnboardingProject(contract: {

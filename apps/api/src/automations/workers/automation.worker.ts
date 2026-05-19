@@ -36,6 +36,11 @@ export class AutomationWorker {
     }
 
     const actions = rule.actions as Array<{ type: string; url?: string; secret?: string; [k: string]: unknown }>;
+    const conditionsMatch = this.automations.matchesRuleConditions(rule.conditions, payload);
+    if (!conditionsMatch) {
+      await this.automations.executeRule(rule, payload, organizationId);
+      return;
+    }
 
     for (const action of actions) {
       if (action.type === 'send_webhook' && action.url) {
